@@ -101,8 +101,17 @@ async function renderBoard() {
   board.innerHTML = "<li>Loading...</li>";
   const list = await loadBoard();
   if (list === null) { board.innerHTML = "<li>Can't reach leaderboard. Check your connection.</li>"; return; }
-  board.innerHTML = list.length ? "" : "<li>No scores yet. Be the first!</li>";
+  board.innerHTML = "";
+  // always show at least 5 rows; empty slots are placeholders
+  const MIN_ROWS = 5;
+  for (let i = list.length; i < MIN_ROWS; i++) list.push(null);
   list.forEach((e, i) => {
+    if (!e) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="rank">${i + 1}</span><span class="nm" style="opacity:.5">---</span>`;
+      board.appendChild(li);
+      return;
+    }
     const skin = SKINS.find(s => s.id === e.skin) || SKINS[0];
     const li = document.createElement("li");
     li.innerHTML =
