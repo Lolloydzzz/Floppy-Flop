@@ -1,4 +1,3 @@
-
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
  
@@ -22,7 +21,7 @@ const ABILITIES = {
   xyruz:   { name: "Teleport",      cd: 10, manual: true,  desc: "Teleports you into the safe gap of the next pipe when danger is near.", cdNote: "10s after use" },
   nogz:    { name: "Extra Life",    cd: 15, manual: false, desc: "Passive. Survive one crash automatically.", cdNote: "15s after the extra life is used" },
   penerz:  { name: "Phase Leap",    cd: 15, manual: true,  charges: 3, desc: "Fly straight through the next 3 pipes like a ghost.", cdNote: "15s after the 3rd pipe" },
- renxu:   { name: "Double Score",  cd: 20, manual: true,  duration: 15, desc: "Earn 2x score for 15 seconds.", cdNote: "20s after it ends" },
+  renxu:   { name: "Double Score",  cd: 20, manual: true,  duration: 15, desc: "Earn 2x score for 15 seconds.", cdNote: "20s after it ends" },
   ven:     { name: "Clone",         cd: 15, manual: false, desc: "Passive. Flies with a clone. You only lose when both crash. A lost clone returns after the cooldown.", cdNote: "15s after a bird is lost" },
   zigvin:  { name: "Pipe Smasher",  cd: 15, manual: true,  charges: 3, desc: "Smash through the next 3 pipes and destroy them.", cdNote: "15s after the 3rd pipe" },
   emanski: { name: "Big Gap",       cd: 15, manual: true,  duration: 5, desc: "Pipe gaps become much bigger for 5 seconds.", cdNote: "15s after it ends" },
@@ -63,7 +62,10 @@ let birds, pipes, score, state = "menu"; // "menu" | "ready" | "playing" | "over
 let ab, invuln, gapNow, gapTarget, mult, msg;
  
 // ---- Leaderboard (shared online via Firebase) ----
-const DB_URL = "https://console.firebase.google.com/project/floppyflop-leaderboard/database/floppyflop-leaderboard-default-rtdb/data/~2F"; // <-- paste yours, no trailing slash
+// This is the DATABASE address, not the console page address.
+// If you chose Singapore as the location, use:
+// "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app"
+const DB_URL = "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 function userKey(name) {
   // Firebase keys can't contain . $ # [ ] /
@@ -472,4 +474,3 @@ canvas.addEventListener("pointerdown", e => {
 });
  
 loop();
- 
