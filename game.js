@@ -1,7 +1,6 @@
-
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
- 
+
 // ---- Settings (tweak these) ----
 const GRAVITY = 0.45;
 const FLAP = -7.5;
@@ -10,7 +9,7 @@ const PIPE_GAP = 160;
 const PIPE_WIDTH = 60;
 const PIPE_SPACING = 220;
 const BIRD_R = 20; // size of the face
- 
+
 // ---- Skins: files live in the skins/ folder ----
 const SKINS = [
   { id: "xyruz", name: "Xyruz" },
@@ -23,11 +22,11 @@ const SKINS = [
   { id: "lloydie", name: "Lloydie" },
 ];
 SKINS.forEach(s => {
-  s.src = "Skins/" + s.id + ".png";
+  s.src = SKIN_DATA[s.id]; // pictures come from skins.js
   s.img = new Image();
   s.img.src = s.src;
 });
- 
+
 // ---- Menu elements ----
 const menu = document.getElementById("menu");
 const nameInput = document.getElementById("username");
@@ -35,12 +34,12 @@ const skinGrid = document.getElementById("skinGrid");
 const playBtn = document.getElementById("playBtn");
 const board = document.getElementById("board");
 const lastScore = document.getElementById("lastScore");
- 
+
 let selected = SKINS[0];
 let player = "";
 let dt = 1; // time step: 1 = one frame at 60 fps
 let bird, pipes, score, state = "menu"; // "menu" | "ready" | "playing" | "over"
- 
+
 // ---- Leaderboard (saved in this browser) ----
 function loadBoard() {
   try { return JSON.parse(localStorage.getItem("flappy_board")) || []; }
@@ -71,7 +70,7 @@ function renderBoard() {
     board.appendChild(li);
   });
 }
- 
+
 // ---- Menu setup ----
 SKINS.forEach(s => {
   const b = document.createElement("button");
@@ -86,7 +85,7 @@ SKINS.forEach(s => {
 });
 try { nameInput.value = localStorage.getItem("flappy_name") || ""; } catch {}
 renderBoard();
- 
+
 playBtn.onclick = () => {
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); nameInput.placeholder = "Username required"; return; }
@@ -96,7 +95,7 @@ playBtn.onclick = () => {
   menu.hidden = true;
   resetGame();
 };
- 
+
 function showMenu(pts) {
   renderBoard();
   lastScore.hidden = false;
@@ -104,7 +103,7 @@ function showMenu(pts) {
   menu.hidden = false;
   state = "menu";
 }
- 
+
 // ---- Clouds ----
 const clouds = Array.from({ length: 5 }, (_, i) => ({
   x: Math.random() * canvas.width,
@@ -126,7 +125,7 @@ function drawClouds() {
     ctx.fill();
   }
 }
- 
+
 // ---- Game ----
 function resetGame() {
   bird = { x: 90, y: 280, vy: 0 };
@@ -134,30 +133,30 @@ function resetGame() {
   score = 0;
   state = "ready";
 }
- 
+
 function addPipe() {
   const top = 60 + Math.random() * (canvas.height - PIPE_GAP - 120);
   pipes.push({ x: canvas.width, top, passed: false });
 }
- 
+
 function flap() {
   if (state === "ready") state = "playing";
   if (state === "playing") bird.vy = FLAP;
 }
- 
+
 function gameOver() {
   state = "over";
   saveScore(player, selected.id, score);
   setTimeout(() => showMenu(score), 700);
 }
- 
+
 function update() {
   if (state !== "playing") return;
   bird.vy += GRAVITY * dt;
   bird.y += bird.vy * dt;
- 
+
   if (!pipes.length || pipes[pipes.length - 1].x < canvas.width - PIPE_SPACING) addPipe();
- 
+
   for (const p of pipes) {
     p.x -= PIPE_SPEED * dt;
     if (!p.passed && p.x + PIPE_WIDTH < bird.x) { p.passed = true; score++; }
@@ -167,10 +166,10 @@ function update() {
     if (hitsX && hitsY) { gameOver(); return; }
   }
   pipes = pipes.filter(p => p.x + PIPE_WIDTH > 0);
- 
+
   if (bird.y + BIRD_R > canvas.height || bird.y - BIRD_R < 0) gameOver();
 }
- 
+
 function drawBird() {
   ctx.save();
   ctx.beginPath();
@@ -194,19 +193,19 @@ function drawBird() {
   ctx.arc(bird.x, bird.y, BIRD_R, 0, Math.PI * 2);
   ctx.stroke();
 }
- 
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawClouds();
   if (state === "menu") return;
- 
+
   ctx.fillStyle = "#4caf50";
   for (const p of pipes) {
     ctx.fillRect(p.x, 0, PIPE_WIDTH, p.top);
     ctx.fillRect(p.x, p.top + PIPE_GAP, PIPE_WIDTH, canvas.height);
   }
   drawBird();
- 
+
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.font = "bold 40px system-ui";
@@ -218,7 +217,7 @@ function draw() {
     ctx.fillText("Aray mo!", canvas.width / 2, 300);
   }
 }
- 
+
 let lastTime = performance.now();
 function loop(now = performance.now()) {
   // Speed no longer depends on the screen/device frame rate
@@ -228,11 +227,10 @@ function loop(now = performance.now()) {
   draw();
   requestAnimationFrame(loop);
 }
- 
+
 document.addEventListener("keydown", e => {
   if (e.code === "Space" && document.activeElement !== nameInput) { e.preventDefault(); flap(); }
 });
 canvas.addEventListener("pointerdown", flap);
- 
+
 loop();
- 
