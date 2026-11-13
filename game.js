@@ -22,7 +22,7 @@ const ABILITIES = {
   xyruz:   { name: "Teleport",      cd: 10, manual: true,  desc: "Teleports you into the safe gap of the next pipe when danger is near.", cdNote: "10s after use" },
   nogz:    { name: "Extra Life",    cd: 15, manual: false, desc: "Passive. Survive one crash automatically.", cdNote: "15s after the extra life is used" },
   penerz:  { name: "Phase Leap",    cd: 15, manual: true,  charges: 3, desc: "Fly straight through the next 3 pipes like a ghost.", cdNote: "15s after the 3rd pipe" },
-  renxu:   { name: "Double Score",  cd: 20, manual: true,  duration: 5, desc: "Earn 2x score for 5 seconds.", cdNote: "20s after it ends" },
+ renxu:   { name: "Double Score",  cd: 20, manual: true,  duration: 15, desc: "Earn 2x score for 15 seconds.", cdNote: "20s after it ends" },
   ven:     { name: "Clone",         cd: 15, manual: false, desc: "Passive. Flies with a clone. You only lose when both crash. A lost clone returns after the cooldown.", cdNote: "15s after a bird is lost" },
   zigvin:  { name: "Pipe Smasher",  cd: 15, manual: true,  charges: 3, desc: "Smash through the next 3 pipes and destroy them.", cdNote: "15s after the 3rd pipe" },
   emanski: { name: "Big Gap",       cd: 15, manual: true,  duration: 5, desc: "Pipe gaps become much bigger for 5 seconds.", cdNote: "15s after it ends" },
@@ -62,36 +62,61 @@ let dt = 1; // time step: 1 = one frame at 60 fps
 let birds, pipes, score, state = "menu"; // "menu" | "ready" | "playing" | "over"
 let ab, invuln, gapNow, gapTarget, mult, msg;
  
-// ---- Leaderboard (saved in this browser) ----
-function loadBoard() {
-  try { return JSON.parse(localStorage.getItem("flappy_board")) || []; }
-  catch { return []; }
+// ---- Leaderboard (shared online via Firebase) ----
+const DB_URL = "https://console.firebase.google.com/project/floppyflop-leaderboard/database/floppyflop-leaderboard-default-rtdb/data/~2F"; // <-- paste yours, no trailing slash
+
+function userKey(name) {
+  // Firebase keys can't contain . $ # [ ] /
+  return name.toLowerCase().replace(/[.$#\[\]\/\s]/g, "_");
 }
-function saveScore(name, skinId, pts) {
-  if (pts <= 0) return;
-  let list = loadBoard();
-  const mine = list.find(e => e.name.toLowerCase() === name.toLowerCase());
-  if (mine) {
-    if (pts > mine.score) { mine.score = pts; mine.skin = skinId; mine.name = name; }
-  } else {
-    list.push({ name, skin: skinId, score: pts });
+
+async function loadBoard() {
+  try {
+    const res = await fetch(`${DB_URL}/scores.json`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    return Object.values(data || {})
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  } catch {
+    return null; // null = couldn't connect
   }
-  list.sort((a, b) => b.score - a.score);
-  try { localStorage.setItem("flappy_board", JSON.stringify(list.slice(0, 10))); } catch {}
 }
-function renderBoard() {
-  const list = loadBoard();
+
+async function saveScore(name, skinId, pts) {
+  if (pts <= 0) return;
+  const url = `${DB_URL}/scores/${encodeURIComponent(userKey(name))}.json`;
+  try {
+    const res = await fetch(url);
+    const mine = await res.json();
+    if (mine && mine.score >= pts) return; // keep personal best only
+    await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, skin: skinId, score: pts }),
+    });
+  } catch {}
+}
+
+async function renderBoard() {
+  board.innerHTML = "<li>Loading...</li>";
+  const list = await loadBoard();
+  if (list === null) { board.innerHTML = "<li>Can't reach leaderboard. Check your connection.</li>"; return; }
   board.innerHTML = list.length ? "" : "<li>No scores yet. Be the first!</li>";
   list.forEach((e, i) => {
     const skin = SKINS.find(s => s.id === e.skin) || SKINS[0];
     const li = document.createElement("li");
     li.innerHTML =
       `<span class="rank">${i + 1}</span><img src="${skin.src}" alt="">` +
-      `<span class="nm"></span><span class="sc">${e.score}</span>`;
+      `<span class="nm"></span><span class="sc"></span>`;
     li.querySelector(".nm").textContent = e.name + " (" + skin.name + ")";
+    li.querySelector(".sc").textContent = e.score;
     board.appendChild(li);
   });
 }
+
+// refresh while the menu is open so you see friends' new scores
+setInterval(() => { if (!menu.hidden) renderBoard(); }, 15000);
  
 // ---- Menu setup ----
 function showInfo() {
@@ -250,8 +275,8 @@ function flap() {
  
 function gameOver() {
   state = "over";
-  saveScore(player, selected.id, score);
-  setTimeout(() => showMenu(score), 700);
+  const saved = saveScore(player, selected.id, score);
+  setTimeout(() => saved.then(() => showMenu(score)), 700);
 }
  
 function die(b) {
