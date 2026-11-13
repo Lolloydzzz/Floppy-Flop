@@ -23,7 +23,7 @@ const SKINS = [
   { id: "lloydie", name: "Lloydie" },
 ];
 SKINS.forEach(s => {
-  s.src = "skins/" + s.id + ".png";
+  s.src = "Skins/" + s.id + ".png";
   s.img = new Image();
   s.img.src = s.src;
 });
