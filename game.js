@@ -62,9 +62,6 @@ let birds, pipes, score, state = "menu"; // "menu" | "ready" | "playing" | "over
 let ab, invuln, gapNow, gapTarget, mult, msg;
  
 // ---- Leaderboard (shared online via Firebase) ----
-// This is the DATABASE address, not the console page address.
-// If you chose Singapore as the location, use:
-// "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app"
 const DB_URL = "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 function userKey(name) {
