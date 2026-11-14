@@ -165,23 +165,9 @@ async function adminInit() {
   Adm.isAdmin = false;
   $("admbar").hidden = true;
   beat();
-  let why = "";
   try {
-    const v = await rdb(`admins/${meId()}`);
-    if (v === true) { Adm.isAdmin = true; $("admbar").hidden = false; }
-    else why = "Admin check: no admin entry for this account (UID " + meId() + "). Value found: " + JSON.stringify(v);
-  } catch (e) {
-    why = "Admin check failed: " + e.message + " (rules probably not published)";
-  }
-  showAdminDebug(why);
-}
-
-// TEMPORARY: shows why the admin button is missing. Delete this and the call above once it works.
-function showAdminDebug(text) {
-  let d = $("admDebug");
-  if (!d) { d = el("p", { id: "admDebug", className: "sub small" }); $("admbar").after(d); }
-  d.textContent = text;
-  d.hidden = !text;
+    if ((await rdb(`admins/${meId()}`)) === true) { Adm.isAdmin = true; $("admbar").hidden = false; }
+  } catch {}
 }
 
 buildAdminUI();
