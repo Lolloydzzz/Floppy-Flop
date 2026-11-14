@@ -17,7 +17,15 @@ const AUTH_ERRORS = {
 };
  
 // Users log in with a username; Firebase needs an email, so we build a fake one.
-const emailFor = name => name.toLowerCase() + "@floppyflop.app";
+// After an admin resets an account, the username gets a new "generation" so it can sign up again.
+const emailFor = (name, gen) => name.toLowerCase() + (gen > 1 ? "." + gen : "") + "@floppyflop.app";
+async function genFor(name) {
+  try {
+    const res = await fetchTimeout(`${DB_URL}/gens/${encodeURIComponent(name.toLowerCase())}.json`);
+    if (res.ok) return Number(await res.json()) || 1;
+  } catch {}
+  return 1;
+}
 const validName = name => /^[A-Za-z0-9_]{3,12}$/.test(name);
  
 // ---- Talking to Firebase ----
@@ -89,15 +97,24 @@ async function loadProfile() {
 }
  
 async function signUp(name, pass) {
-  const d = await authCall("signUp", { email: emailFor(name), password: pass });
+  const d = await authCall("signUp", { email: emailFor(name, await genFor(name)), password: pass });
   Social.user = { uid: d.localId, name, bio: "", pfp: "skin:" + selected.id };
   setTokens(d);
   await dbCall(`usernames/${name.toLowerCase()}`, "PUT", Social.user.uid);
   await dbCall(`users/${Social.user.uid}`, "PUT", { name, bio: "", pfp: Social.user.pfp });
+  // if an admin reset this username, bring back the old best score
+  try {
+    const key = name.toLowerCase();
+    const rec = await dbCall(`recover/${key}`);
+    if (rec) {
+      if (rec.score > 0) await dbCall(`scores/${Social.user.uid}`, "PUT", { name, skin: rec.skin || selected.id, score: rec.score });
+      await dbCall(`recover/${key}`, "DELETE");
+    }
+  } catch {}
 }
  
 async function logIn(name, pass) {
-  const d = await authCall("signInWithPassword", { email: emailFor(name), password: pass });
+  const d = await authCall("signInWithPassword", { email: emailFor(name, await genFor(name)), password: pass });
   Social.user = { uid: d.localId, name };
   setTokens(d);
   await loadProfile();
@@ -158,7 +175,7 @@ function buildUI() {
      <input id="authPass" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
      <p id="authMsg" class="msg"></p>
      <div class="row"><button id="loginBtn">Log in</button><button id="signupBtn" class="alt">Sign up</button></div>
-     <p class="sub small">Keep your password safe. There is no email, so it can't be reset.</p>`;
+     <p class="sub small">Keep your password safe. If you forget it, ask the admin to reset your account, then sign up again with the same username.</p>`;
   stage.appendChild(auth);
  
   const prof = document.createElement("div");
