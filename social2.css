@@ -66,3 +66,11 @@
 #pview h2 { margin: 10px 0 4px; }
 #pview .big { margin-top: 4px; }
 #pview .row { flex-wrap: wrap; }
+
+/* admin */
+#admbar { margin: -4px 0 10px; }
+#admbar[hidden] { display: none; }
+#admbar button { width: 100%; padding: 8px; font-size: 13px; font-weight: bold; border: 0; border-radius: 8px; background: #7a3d3d; color: #fff; cursor: pointer; }
+#admbar button:hover { background: #944a4a; }
+.urow .dot.on { background: #4caf50; }
+.urow .dot.off { background: #5b7a99; }
