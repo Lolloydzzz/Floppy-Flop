@@ -15,17 +15,18 @@ const BACK_X = 45;          // Ven's clone position
 const SCORE_X = 90;         // a pipe scores when it passes this x
 const HUD_H = 56;           // ability bar at the bottom
 const PLAY_H = canvas.height - HUD_H;
+const ONLINE_WINDOW = 45000; // ms: a player counts as online if seen within this time
  
 // ---- Abilities (cd = cooldown in seconds) ----
 const ABILITIES = {
   xyruz:   { name: "Teleport",      cd: 10, manual: true,  desc: "Teleports you into the safe gap of the next pipe when danger is near.", cdNote: "10s after use" },
-  nogz:    { name: "Extra Life",    cd: 15, manual: false, desc: "Passive. Survive one crash automatically.", cdNote: "15s after the extra life is used" },
+  nogz:    { name: "Extra Life",    cd: 25, manual: false, desc: "Passive. Survive one crash automatically.", cdNote: "25s after the extra life is used" },
   penerz:  { name: "Phase Leap",    cd: 15, manual: true,  charges: 3, desc: "Fly straight through the next 3 pipes like a ghost.", cdNote: "15s after the 3rd pipe" },
   renxu:   { name: "Double Score",  cd: 20, manual: true,  duration: 15, desc: "Earn 2x score for 15 seconds.", cdNote: "20s after it ends" },
   ven:     { name: "Clone",         cd: 15, manual: false, desc: "Passive. Flies with a clone. You only lose when both crash. A lost clone returns after the cooldown.", cdNote: "15s after a bird is lost" },
   zigvin:  { name: "Pipe Smasher",  cd: 15, manual: true,  charges: 3, desc: "Smash through the next 3 pipes and destroy them.", cdNote: "15s after the 3rd pipe" },
   emanski: { name: "Big Gap",       cd: 15, manual: true,  duration: 5, desc: "Pipe gaps become much bigger for 5 seconds.", cdNote: "15s after it ends" },
-  lloydie: { name: "Time Reversal", cd: 20, manual: false, desc: "Passive. After a crash, time reverses and you revive, but your score drops by 2.", cdNote: "20s after it is used" },
+  lloydie: { name: "Time Reversal", cd: 15, manual: false, desc: "Passive. After a crash, time reverses and you revive, but your score drops by 2.", cdNote: "15s after it is used" },
 };
  
 // ---- Skins (pictures come from skins.js) ----
@@ -54,14 +55,18 @@ const skinInfo = document.getElementById("skinInfo");
 const playBtn = document.getElementById("playBtn");
 const board = document.getElementById("board");
 const lastScore = document.getElementById("lastScore");
+const onlineEl = document.getElementById("online");
  
 let selected = SKINS[0];
 let player = "";
 let dt = 1; // time step: 1 = one frame at 60 fps
 let birds, pipes, score, state = "menu"; // "menu" | "ready" | "playing" | "over"
 let ab, invuln, gapNow, gapTarget, mult, msg;
+let particles = [];
+let shake = 0;
+let tick = 0;
  
-// ---- Leaderboard (shared online via Firebase) ----
+// ---- Online database (Firebase) ----
 const DB_URL = "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 // fetch that gives up after 6 seconds so the game never hangs
@@ -76,6 +81,7 @@ function userKey(name) {
   return name.toLowerCase().replace(/[.$#\[\]\/\s]/g, "_");
 }
 
+// ---- Leaderboard ----
 async function loadBoard() {
   try {
     const res = await fetchTimeout(`${DB_URL}/scores.json`);
@@ -132,6 +138,52 @@ async function renderBoard() {
 
 // refresh while the menu is open so you see friends' new scores
 setInterval(() => { if (!menu.hidden) renderBoard(); }, 15000);
+
+// ---- Players online ----
+const SESSION_ID = Math.random().toString(36).slice(2, 10);
+const PRESENCE_URL = `${DB_URL}/presence/${SESSION_ID}.json`;
+let onlineCount = 0;
+
+function showOnline(text) {
+  if (onlineEl) onlineEl.textContent = text;
+}
+
+async function heartbeat() {
+  try {
+    // write "I'm here" with the server's clock
+    const res = await fetchTimeout(PRESENCE_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: { ".sv": "timestamp" } }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    const mine = await res.json();
+    const now = mine && typeof mine.t === "number" ? mine.t : Date.now();
+
+    // count everyone seen recently
+    const all = await (await fetchTimeout(`${DB_URL}/presence.json`)).json() || {};
+    let n = 0;
+    for (const [id, v] of Object.entries(all)) {
+      const age = now - ((v && v.t) || 0);
+      if (age <= ONLINE_WINDOW) n++;
+      else if (age > 5 * 60 * 1000) {
+        // clean up old entries
+        fetchTimeout(`${DB_URL}/presence/${id}.json`, { method: "DELETE" }).catch(() => {});
+      }
+    }
+    onlineCount = Math.max(1, n);
+    showOnline("● " + onlineCount + " online");
+  } catch {
+    onlineCount = 0;
+    showOnline("");
+  }
+}
+heartbeat();
+setInterval(heartbeat, 20000);
+// leave the list when the tab closes
+window.addEventListener("pagehide", () => {
+  try { fetch(PRESENCE_URL, { method: "DELETE", keepalive: true }); } catch {}
+});
  
 // ---- Menu setup ----
 function showInfo() {
@@ -195,6 +247,98 @@ function drawClouds() {
     ctx.fill();
   }
 }
+
+// ---- Particles & effects ----
+function addParticle(q) {
+  particles.push(q);
+  if (particles.length > 300) particles.shift();
+}
+function burst(x, y, color, n, speed) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const v = (0.4 + Math.random() * 0.6) * speed;
+    const life = 0.5 + Math.random() * 0.4;
+    addParticle({ type: "circle", x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0.08, life, max: life, s: 2 + Math.random() * 3, color });
+  }
+}
+function ring(x, y, color, r) {
+  addParticle({ type: "ring", x, y, vx: 0, vy: 0, g: 0, life: 0.55, max: 0.55, r, color });
+}
+function floatText(x, y, text, color) {
+  addParticle({ type: "text", x, y, vx: 0, vy: -1, g: 0, life: 0.9, max: 0.9, text, color });
+}
+function debris(x, y, color) {
+  const life = 0.7 + Math.random() * 0.5;
+  addParticle({
+    type: "rect", x, y,
+    vx: (Math.random() - 0.5) * 7, vy: -Math.random() * 5 - 1, g: 0.35,
+    life, max: life, s: 6 + Math.random() * 11,
+    rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, color,
+  });
+}
+function updateParticles() {
+  const sec = dt / 60;
+  for (const q of particles) {
+    q.x += q.vx * dt;
+    q.y += q.vy * dt;
+    q.vy += q.g * dt;
+    if (q.type === "rect") q.rot += q.vr * dt;
+    q.life -= sec;
+  }
+  particles = particles.filter(q => q.life > 0);
+  shake *= Math.pow(0.88, dt);
+  if (shake < 0.2) shake = 0;
+}
+function drawParticles() {
+  for (const q of particles) {
+    const a = Math.max(0, q.life / q.max);
+    ctx.globalAlpha = a;
+    if (q.type === "ring") {
+      ctx.strokeStyle = q.color;
+      ctx.lineWidth = 4 * a + 1;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, q.r * (1 - a) + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (q.type === "rect") {
+      ctx.save();
+      ctx.translate(q.x, q.y);
+      ctx.rotate(q.rot);
+      ctx.fillStyle = q.color;
+      ctx.fillRect(-q.s / 2, -q.s / 2, q.s, q.s * 0.7);
+      ctx.restore();
+    } else if (q.type === "text") {
+      ctx.fillStyle = q.color;
+      ctx.font = "bold 22px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(q.text, q.x, q.y);
+    } else {
+      ctx.fillStyle = q.color;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, q.s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// The smash animation: the pipe explodes into chunks
+function shatterPipe(p, b) {
+  const top = p.cy - gapNow / 2, bot = p.cy + gapNow / 2;
+  const colors = ["#7be07b", "#46b856", "#ff9a5a", "#d9622f", "#6e230e"];
+  const pick = () => colors[Math.floor(Math.random() * colors.length)];
+  // chunks around the bird
+  for (let i = 0; i < 16; i++) {
+    debris(p.x + Math.random() * PIPE_WIDTH, b.y + (Math.random() - 0.5) * 150, pick());
+  }
+  // chunks from the rest of the pipe
+  for (let i = 0; i < 14; i++) {
+    const y = Math.random() < 0.5 ? Math.random() * Math.max(1, top) : bot + Math.random() * (PLAY_H - bot);
+    debris(p.x + Math.random() * PIPE_WIDTH, y, pick());
+  }
+  ring(p.x + PIPE_WIDTH / 2, b.y, "#ffb36b", 70);
+  burst(p.x + PIPE_WIDTH / 2, b.y, "#ffd23f", 14, 5);
+  shake = 11;
+}
  
 // ---- Game setup ----
 function makeBird(x, clone) {
@@ -205,6 +349,9 @@ function resetGame() {
   birds = [makeBird(FRONT_X, false)];
   if (selected.id === "ven") birds.push(makeBird(BACK_X, true)); // Ven starts with a clone
   pipes = [];
+  particles = [];
+  shake = 0;
+  tick = 0;
   score = 0;
   ab = { state: "ready", t: 0, charges: 0 }; // state: "ready" | "active" | "cooldown"
   invuln = 0;
@@ -239,17 +386,25 @@ function useAbility() {
   if (state !== "playing" || !a.manual || ab.state !== "ready") return;
   const id = selected.id;
   if (id === "xyruz") {
-    birds.forEach(b => { b.y = safeY(b); b.vy = 0; });
+    birds.forEach(b => {
+      ring(b.x, b.y, "#ffd23f", 45);
+      burst(b.x, b.y, "#ffd23f", 14, 3.5);
+      b.y = safeY(b);
+      b.vy = 0;
+      ring(b.x, b.y, "#ffffff", 55);
+      burst(b.x, b.y, "#9ad7ff", 18, 4);
+    });
     invuln = 0.4;
     toast("Teleport!");
     startCd();
     return;
   }
   ab.state = "active";
-  if (id === "penerz") { ab.charges = a.charges; toast("Phase Leap: 3 pipes"); }
-  if (id === "zigvin") { ab.charges = a.charges; toast("Smash ready: 3 pipes"); }
-  if (id === "renxu") { ab.t = a.duration; mult = 2; toast("Double score!"); }
-  if (id === "emanski") { ab.t = a.duration; gapTarget = PIPE_GAP * BIG_GAP; toast("Big gap!"); }
+  const fx = birds[0];
+  if (id === "penerz") { ab.charges = a.charges; toast("Phase Leap: 3 pipes"); ring(fx.x, fx.y, "#9db8ff", 60); }
+  if (id === "zigvin") { ab.charges = a.charges; toast("Smash ready: 3 pipes"); ring(fx.x, fx.y, "#ff9a5a", 60); }
+  if (id === "renxu") { ab.t = a.duration; mult = 2; toast("Double score!"); ring(fx.x, fx.y, "#ffd23f", 60); burst(fx.x, fx.y, "#ffd23f", 16, 4); }
+  if (id === "emanski") { ab.t = a.duration; gapTarget = PIPE_GAP * BIG_GAP; toast("Big gap!"); ring(fx.x, fx.y, "#7ee8f5", 60); shake = 5; }
 }
  
 function spendCharge() {
@@ -276,6 +431,8 @@ function tickAbility(sec) {
         buddy.y = birds[0].y;
         buddy.vy = birds[0].vy;
         birds.push(buddy);
+        ring(buddy.x, buddy.y, "#9ad7ff", 50);
+        burst(buddy.x, buddy.y, "#9ad7ff", 14, 3.5);
         toast("Clone is back!");
       }
     }
@@ -304,13 +461,21 @@ function die(b) {
     invuln = 1.5;
     if (id === "lloydie") {
       score = Math.max(0, score - 2);
+      ring(b.x, b.y, "#c58bff", 110);
+      ring(b.x, b.y, "#e6ccff", 70);
+      burst(b.x, b.y, "#c58bff", 22, 4.5);
+      floatText(b.x + 20, b.y - 30, "-2", "#e6ccff");
       toast("Time reversed! -2");
     } else {
+      ring(b.x, b.y, "#7fd6ff", 90);
+      burst(b.x, b.y, "#7fd6ff", 26, 5);
       toast("Extra life used!");
     }
     startCd();
     return;
   }
+  burst(b.x, b.y, "#ff6b6b", 20, 5);
+  shake = Math.max(shake, 6);
   birds = birds.filter(x => x !== b);
   if (!birds.length) { gameOver(); return; }
   if (id === "ven") {
@@ -327,19 +492,35 @@ function hitsPipe(b, p) {
  
 function update() {
   const sec = dt / 60;
+  updateParticles();
   invuln = Math.max(0, (invuln || 0) - sec);
   if (msg) { msg.t -= sec; if (msg.t <= 0) msg = null; }
   if (gapNow !== undefined) gapNow += (gapTarget - gapNow) * Math.min(1, 0.12 * dt);
   if (state !== "playing") return;
  
   tickAbility(sec);
+  tick++;
+
+  // passive visual effects while an ability is active
+  if (ab.state === "active" && tick % 3 === 0) {
+    if (selected.id === "penerz") {
+      birds.forEach(b => addParticle({ type: "circle", x: b.x - 8, y: b.y, vx: -PIPE_SPEED * 0.6, vy: 0, g: 0, life: 0.4, max: 0.4, s: 6, color: "#9db8ff" }));
+    }
+    if (selected.id === "renxu") {
+      birds.forEach(b => addParticle({ type: "circle", x: b.x + (Math.random() - 0.5) * 30, y: b.y + (Math.random() - 0.5) * 30, vx: 0, vy: -1, g: 0, life: 0.5, max: 0.5, s: 3, color: "#ffd23f" }));
+    }
+  }
  
   for (const b of birds) { b.vy += GRAVITY * dt; b.y += b.vy * dt; }
  
   if (!pipes.length || pipes[pipes.length - 1].x < canvas.width - PIPE_SPACING) addPipe();
   for (const p of pipes) {
     p.x -= PIPE_SPEED * dt;
-    if (!p.passed && p.x + PIPE_WIDTH < SCORE_X) { p.passed = true; score += mult; }
+    if (!p.passed && p.x + PIPE_WIDTH < SCORE_X) {
+      p.passed = true;
+      score += mult;
+      if (mult > 1 && birds[0]) floatText(SCORE_X + 15, birds[0].y - 30, "+" + mult, "#ffd23f");
+    }
   }
  
   for (const b of birds.slice()) {
@@ -351,9 +532,16 @@ function update() {
     }
     for (const p of pipes) {
       if (p.immune || p.dead || invuln > 0 || !hitsPipe(b, p)) continue;
-      if (selected.id === "penerz" && ab.state === "active") { p.immune = true; spendCharge(); continue; }
+      if (selected.id === "penerz" && ab.state === "active") {
+        p.immune = true;
+        burst(b.x, b.y, "#9db8ff", 14, 3.5);
+        ring(b.x, b.y, "#9db8ff", 40);
+        spendCharge();
+        continue;
+      }
       if (selected.id === "zigvin" && ab.state === "active") {
         p.dead = true;
+        shatterPipe(p, b);
         if (!p.passed) { p.passed = true; score += mult; }
         toast("SMASH!");
         spendCharge();
@@ -367,6 +555,67 @@ function update() {
 }
  
 // ---- Drawing ----
+// Pipe colors. Each ability can give the pipes its own look while active.
+const PALETTES = {
+  normal:  { c: ["#2a7d37", "#7be07b", "#46b856", "#1f5f2a"], edge: "#174a20", glow: null },
+  zigvin:  { c: ["#a33a1c", "#ff9a5a", "#d9622f", "#6e230e"], edge: "#4d1706", glow: "#ff7a2f" },
+  penerz:  { c: ["#4a63c9", "#bcd0ff", "#7391f2", "#2f428f"], edge: "#22316e", glow: "#8fb0ff" },
+  emanski: { c: ["#1d8a99", "#8ef0fa", "#36b4c4", "#126673"], edge: "#0b4852", glow: "#5fe3f2" },
+  renxu:   { c: ["#b8860b", "#fff0a0", "#e6b92e", "#7a5a05"], edge: "#523b02", glow: "#ffd23f" },
+};
+function pipePalette() {
+  if (ab && ab.state === "active" && PALETTES[selected.id]) return PALETTES[selected.id];
+  return PALETTES.normal;
+}
+function pipeGrad(x, w, pal) {
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, pal.c[0]);
+  g.addColorStop(0.3, pal.c[1]);
+  g.addColorStop(0.7, pal.c[2]);
+  g.addColorStop(1, pal.c[3]);
+  return g;
+}
+function drawPipe(p, pal) {
+  const top = p.cy - gapNow / 2, bot = p.cy + gapNow / 2;
+  const capH = 24, capW = PIPE_WIDTH + 10, capX = p.x - 5;
+  const body = pipeGrad(p.x, PIPE_WIDTH, pal);
+  const cap = pipeGrad(capX, capW, pal);
+  const topBodyH = top - capH + 2;
+  const botBodyY = bot + capH - 2;
+
+  ctx.save();
+  ctx.globalAlpha = p.immune ? 0.35 : 1;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = pal.edge;
+  if (pal.glow) { ctx.shadowColor = pal.glow; ctx.shadowBlur = 14; }
+
+  // bodies
+  ctx.fillStyle = body;
+  if (topBodyH > 0) { ctx.fillRect(p.x, 0, PIPE_WIDTH, topBodyH); ctx.strokeRect(p.x, 0, PIPE_WIDTH, topBodyH); }
+  ctx.fillRect(p.x, botBodyY, PIPE_WIDTH, PLAY_H - botBodyY);
+  ctx.strokeRect(p.x, botBodyY, PIPE_WIDTH, PLAY_H - botBodyY);
+
+  // caps
+  ctx.fillStyle = cap;
+  ctx.fillRect(capX, top - capH, capW, capH);
+  ctx.strokeRect(capX, top - capH, capW, capH);
+  ctx.fillRect(capX, bot, capW, capH);
+  ctx.strokeRect(capX, bot, capW, capH);
+
+  // shine
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  if (topBodyH > 0) ctx.fillRect(p.x + 9, 0, 6, topBodyH);
+  ctx.fillRect(p.x + 9, botBodyY, 6, PLAY_H - botBodyY);
+  ctx.fillRect(capX + 8, top - capH + 3, 6, capH - 6);
+  ctx.fillRect(capX + 8, bot + 3, 6, capH - 6);
+  // shadow under each cap
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(capX, top - 5, capW, 5);
+  ctx.fillRect(capX, bot, capW, 5);
+  ctx.restore();
+}
+
 function drawBird(b) {
   let alpha = b.clone ? 0.7 : 1;
   if (invuln > 0 && Math.floor(invuln * 10) % 2 === 0) alpha *= 0.4;
@@ -425,20 +674,12 @@ function drawHUD() {
   ctx.fillRect(14, y + 36, (canvas.width - 28) * Math.max(0, Math.min(1, frac)), 8);
 }
  
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawClouds();
-  if (state === "menu") return;
- 
-  for (const p of pipes) {
-    const top = p.cy - gapNow / 2, bot = p.cy + gapNow / 2;
-    ctx.globalAlpha = p.immune ? 0.35 : 1;
-    ctx.fillStyle = "#4caf50";
-    ctx.fillRect(p.x, 0, PIPE_WIDTH, top);
-    ctx.fillRect(p.x, bot, PIPE_WIDTH, PLAY_H - bot);
-  }
+function drawScene() {
+  const pal = pipePalette();
+  for (const p of pipes) drawPipe(p, pal);
   ctx.globalAlpha = 1;
   birds.forEach(drawBird);
+  drawParticles();
   drawHUD();
  
   ctx.fillStyle = "#fff";
@@ -449,6 +690,13 @@ function draw() {
     ctx.fillStyle = "#ffd23f";
     ctx.font = "bold 22px system-ui";
     ctx.fillText("x" + mult, canvas.width / 2 + 55, 68);
+  }
+  if (onlineCount > 0) {
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "bold 13px system-ui";
+    ctx.textAlign = "left";
+    ctx.fillText("● " + onlineCount + " online", 10, 20);
+    ctx.textAlign = "center";
   }
   if (msg) {
     ctx.globalAlpha = Math.min(1, msg.t * 2);
@@ -464,6 +712,15 @@ function draw() {
     ctx.font = "bold 32px system-ui";
     ctx.fillText("Aray mo!", canvas.width / 2, 300);
   }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  drawClouds();
+  if (state !== "menu") drawScene();
+  ctx.restore();
 }
  
 let lastTime = performance.now();
