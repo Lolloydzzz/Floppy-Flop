@@ -16,6 +16,12 @@ const SCORE_X = 90;         // a pipe scores when it passes this x
 const HUD_H = 56;           // ability bar at the bottom
 const PLAY_H = canvas.height - HUD_H;
 const ONLINE_WINDOW = 45000; // ms: a player counts as online if seen within this time
+const BOSS_EVERY = 100;     // a boss appears every 100 points
+const BOSS_REWARD = 50;     // points for beating a boss
+const BOSS_R = 80;          // boss radius (giant!)
+const BULLET_SPEED = 3.4;
+const BULLET_R = 12;
+const BOSS_MOUTH = { x: -62, y: 40 }; // where shots come out (relative to boss center)
  
 // ---- Abilities (cd = cooldown in seconds) ----
 const ABILITIES = {
@@ -65,6 +71,9 @@ let ab, invuln, gapNow, gapTarget, mult, msg;
 let particles = [];
 let shake = 0;
 let tick = 0;
+let boss = null, bullets = [], bossCount = 0, nextBossAt = BOSS_EVERY;
+const bossImg = new Image();
+if (typeof BOSS_IMG !== "undefined") bossImg.src = BOSS_IMG;
  
 // ---- Online database (Firebase) ----
 const DB_URL = "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -264,8 +273,8 @@ function burst(x, y, color, n, speed) {
 function ring(x, y, color, r) {
   addParticle({ type: "ring", x, y, vx: 0, vy: 0, g: 0, life: 0.55, max: 0.55, r, color });
 }
-function floatText(x, y, text, color) {
-  addParticle({ type: "text", x, y, vx: 0, vy: -1, g: 0, life: 0.9, max: 0.9, text, color });
+function floatText(x, y, text, color, size = 22, life = 0.9) {
+  addParticle({ type: "text", x, y, vx: 0, vy: -1, g: 0, life, max: life, text, color, size });
 }
 function debris(x, y, color) {
   const life = 0.7 + Math.random() * 0.5;
@@ -308,7 +317,7 @@ function drawParticles() {
       ctx.restore();
     } else if (q.type === "text") {
       ctx.fillStyle = q.color;
-      ctx.font = "bold 22px system-ui";
+      ctx.font = "bold " + (q.size || 22) + "px system-ui";
       ctx.textAlign = "center";
       ctx.fillText(q.text, q.x, q.y);
     } else {
@@ -352,6 +361,10 @@ function resetGame() {
   particles = [];
   shake = 0;
   tick = 0;
+  boss = null;
+  bullets = [];
+  bossCount = 0;
+  nextBossAt = BOSS_EVERY;
   score = 0;
   ab = { state: "ready", t: 0, charges: 0 }; // state: "ready" | "active" | "cooldown"
   invuln = 0;
@@ -376,6 +389,24 @@ function startCd() {
 }
  
 function safeY(b) {
+  if (boss) {
+    // boss fight: pick the height farthest from every incoming shot
+    if (boss.phase === "fight" && bullets.length) {
+      let best = PLAY_H / 2, bestD = -1;
+      for (let y = BIRD_R + 10; y <= PLAY_H - BIRD_R - 10; y += 20) {
+        let d = Infinity;
+        for (const q of bullets) {
+          if (q.vx >= 0) continue;
+          const t = (b.x - q.x) / q.vx;
+          if (t < 0) continue;
+          d = Math.min(d, Math.abs(y - (q.y + q.vy * t)));
+        }
+        if (d !== Infinity && d > bestD) { bestD = d; best = y; }
+      }
+      return best;
+    }
+    return PLAY_H / 2;
+  }
   // middle of the gap of the nearest pipe that is not fully behind the bird
   const p = pipes.find(p => !p.dead && p.x + PIPE_WIDTH > b.x - BIRD_R);
   return p ? p.cy : PLAY_H / 2;
@@ -439,6 +470,107 @@ function tickAbility(sec) {
   }
 }
  
+// ---- Boss fight ----
+function startBoss() {
+  bossCount++;
+  nextBossAt += BOSS_EVERY;
+  boss = {
+    phase: "incoming",           // incoming -> enter -> fight -> dying
+    x: canvas.width + BOSS_R + 20,
+    y: PLAY_H / 2,
+    t: 0, flash: 0, kick: 0,
+    maxHp: Math.min(20, 10 + 2 * (bossCount - 1)),   // = number of shots he fires
+    interval: Math.max(0.75, 1.15 - 0.08 * (bossCount - 1)),
+    shootT: 1.2, deathT: 0, popped: false,
+  };
+  boss.hp = boss.hpShown = boss.maxHp;
+  bullets = [];
+  // charge-based abilities end when a boss shows up
+  if (ab.state === "active" && selected.ability.charges) startCd();
+}
+
+function bossShoot() {
+  const sx = boss.x + BOSS_MOUTH.x, sy = boss.y + BOSS_MOUTH.y;
+  const t = birds[Math.floor(Math.random() * birds.length)];
+  const aims = [t.y];
+  if (boss.hp <= boss.maxHp / 2) aims.push(t.y + (Math.random() < 0.5 ? -1 : 1) * 110); // double shot when hurt
+  for (const ay of aims) {
+    const dx = t.x - sx, dy = ay - sy, d = Math.hypot(dx, dy);
+    bullets.push({ x: sx, y: sy, vx: dx / d * BULLET_SPEED, vy: dy / d * BULLET_SPEED });
+  }
+  boss.hp--;                 // every shot costs him health
+  boss.flash = 0.18;
+  boss.kick = 1;
+  burst(sx, sy, "#ff6b6b", 8, 3);
+  if (boss.hp <= 0) { startBossDeath(); return; }
+  boss.shootT = boss.interval;
+}
+
+function startBossDeath() {
+  boss.phase = "dying";
+  boss.deathT = 0;
+  bullets.forEach(q => burst(q.x, q.y, "#ff6b6b", 8, 3));
+  bullets = [];
+  toast("He is falling apart...");
+}
+
+function popBoss() {
+  boss.popped = true;
+  score += BOSS_REWARD;
+  const cx = boss.x, cy = boss.y;
+  ring(cx, cy, "#ffffff", 220);
+  ring(cx, cy, "#ff9a5a", 160);
+  ring(cx, cy, "#ffd23f", 110);
+  burst(cx, cy, "#ffd23f", 24, 10);
+  burst(cx, cy, "#ff6b6b", 24, 8);
+  burst(cx, cy, "#ffffff", 20, 6);
+  burst(cx, cy, "#7be07b", 16, 7);
+  const colors = ["#ffd23f", "#ff6b6b", "#7ee8f5", "#c58bff", "#7be07b"];
+  for (let i = 0; i < 24; i++) {
+    debris(cx + (Math.random() - 0.5) * 120, cy + (Math.random() - 0.5) * 120, colors[i % colors.length]);
+  }
+  floatText(cx - 30, cy, "+" + BOSS_REWARD, "#ffd23f", 48, 1.4);
+  shake = 20;
+  toast("BOSS DEFEATED! +" + BOSS_REWARD);
+}
+
+function updateBoss(sec) {
+  if (!boss) return;
+  boss.t += sec;
+  boss.flash = Math.max(0, boss.flash - sec);
+  boss.kick *= Math.pow(0.85, dt);
+  boss.hpShown += (boss.hp - boss.hpShown) * Math.min(1, 0.15 * dt);
+  if (boss.phase !== "dying") boss.y = PLAY_H / 2 + Math.sin(boss.t * 1.4) * 120;
+
+  if (boss.phase === "incoming") {
+    if (!pipes.length) boss.phase = "enter";          // wait until the pipes are gone
+  } else if (boss.phase === "enter") {
+    boss.x -= 2.2 * dt;
+    if (boss.x <= canvas.width - BOSS_R - 10) {
+      boss.x = canvas.width - BOSS_R - 10;
+      boss.phase = "fight";
+      boss.shootT = 1.2;
+      shake = 8;
+      toast("BOSS FIGHT!");
+    }
+  } else if (boss.phase === "fight") {
+    boss.shootT -= sec;
+    if (boss.shootT <= 0) bossShoot();
+  } else if (boss.phase === "dying") {
+    boss.deathT += sec;
+    if (!boss.popped && boss.deathT >= 1.0) popBoss();
+    if (boss.popped && boss.deathT >= 1.7) boss = null;   // back to normal pipes
+  }
+
+  // shots
+  for (const q of bullets) {
+    q.x += q.vx * dt;
+    q.y += q.vy * dt;
+    if (tick % 2 === 0) addParticle({ type: "circle", x: q.x, y: q.y, vx: 0, vy: 0, g: 0, life: 0.25, max: 0.25, s: 5, color: "#ff6b6b" });
+  }
+  bullets = bullets.filter(q => q.x > -30 && q.x < canvas.width + 30 && q.y > -30 && q.y < PLAY_H + 30);
+}
+
 // ---- Game logic ----
 function flap() {
   if (state === "ready") state = "playing";
@@ -513,7 +645,8 @@ function update() {
  
   for (const b of birds) { b.vy += GRAVITY * dt; b.y += b.vy * dt; }
  
-  if (!pipes.length || pipes[pipes.length - 1].x < canvas.width - PIPE_SPACING) addPipe();
+  // no new pipes while a boss is around
+  if (!boss && (!pipes.length || pipes[pipes.length - 1].x < canvas.width - PIPE_SPACING)) addPipe();
   for (const p of pipes) {
     p.x -= PIPE_SPEED * dt;
     if (!p.passed && p.x + PIPE_WIDTH < SCORE_X) {
@@ -523,9 +656,23 @@ function update() {
     }
   }
  
+  if (!boss && score >= nextBossAt) startBoss();
+  updateBoss(sec);
+
   for (const b of birds.slice()) {
     if (state !== "playing") break;
     let dead = false;
+    // boss shots
+    if (boss && boss.phase === "fight" && invuln <= 0) {
+      for (const q of bullets) {
+        if (Math.hypot(q.x - b.x, q.y - b.y) < BULLET_R + BIRD_R - 6) {
+          q.hit = true;
+          burst(q.x, q.y, "#ff6b6b", 10, 4);
+          dead = true;
+        }
+      }
+      bullets = bullets.filter(q => !q.hit);
+    }
     if (b.y + BIRD_R > PLAY_H || b.y - BIRD_R < 0) {
       if (invuln > 0) { b.y = Math.max(BIRD_R, Math.min(PLAY_H - BIRD_R, b.y)); b.vy = 0; }
       else dead = true;
@@ -674,13 +821,116 @@ function drawHUD() {
   ctx.fillRect(14, y + 36, (canvas.width - 28) * Math.max(0, Math.min(1, frac)), 8);
 }
  
+function drawBoss() {
+  if (!boss || boss.popped || boss.phase === "incoming") return;
+  let x = boss.x, y = boss.y, sc = 1 + boss.kick * 0.07;
+  let whiteFlash = boss.flash > 0 ? 0.55 : 0;
+  if (boss.phase === "dying") {
+    const k = boss.deathT; // 0..1 then pop
+    x += (Math.random() - 0.5) * (4 + k * 14);
+    y += (Math.random() - 0.5) * (4 + k * 14);
+    sc = 1 + 0.4 * k * k;           // swells like a balloon
+    if (Math.floor(k * 12) % 2 === 0) whiteFlash = 0.7;
+  }
+  const R = BOSS_R;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(sc, sc);
+  // glowing aura
+  ctx.shadowColor = "#ff3b3b";
+  ctx.shadowBlur = 32;
+  ctx.fillStyle = "#3a0f0f";
+  ctx.beginPath();
+  ctx.arc(0, 0, R + 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // face
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.clip();
+  if (bossImg.complete && bossImg.naturalWidth > 0) {
+    ctx.drawImage(bossImg, -R, -R, R * 2, R * 2);
+  } else {
+    ctx.fillStyle = "#c0392b";
+    ctx.fillRect(-R, -R, R * 2, R * 2);
+  }
+  if (whiteFlash) { ctx.fillStyle = "rgba(255,255,255," + whiteFlash + ")"; ctx.fillRect(-R, -R, R * 2, R * 2); }
+  ctx.restore();
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = whiteFlash ? "#ffffff" : "#ff4d4d";
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  // charging glow before each shot
+  if (boss.phase === "fight" && boss.shootT < 0.4) {
+    const k = 1 - boss.shootT / 0.4;
+    ctx.shadowColor = "#ff3b3b";
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = "#ff5252";
+    ctx.beginPath();
+    ctx.arc(BOSS_MOUTH.x, BOSS_MOUTH.y, 4 + 10 * k, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBullets() {
+  for (const q of bullets) {
+    ctx.save();
+    ctx.shadowColor = "#ff3b3b";
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "#ff5252";
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, BULLET_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ffd6d6";
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, BULLET_R * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawBossUI() {
+  if (!boss) return;
+  if (boss.phase === "incoming" || boss.phase === "enter") {
+    // warning flash
+    const on = Math.floor(boss.t * 4) % 2 === 0;
+    ctx.fillStyle = on ? "rgba(255,0,0,0.14)" : "rgba(255,0,0,0.04)";
+    ctx.fillRect(0, 0, canvas.width, PLAY_H);
+    ctx.textAlign = "center";
+    ctx.fillStyle = on ? "#ff5252" : "#ffffff";
+    ctx.font = "bold 38px system-ui";
+    ctx.fillText("WARNING!", canvas.width / 2, 190);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 18px system-ui";
+    ctx.fillText("A giant boss is coming", canvas.width / 2, 220);
+  }
+  if (boss.phase !== "incoming" && !boss.popped) {
+    const bw = 300, bh = 14, bx = (canvas.width - bw) / 2, by = 16;
+    ctx.fillStyle = "#0b141d";
+    ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
+    ctx.fillStyle = "#c0392b";
+    ctx.fillRect(bx, by, bw * Math.max(0, boss.hpShown / boss.maxHp), bh);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("BOSS", canvas.width / 2, by + 11);
+  }
+}
+
 function drawScene() {
   const pal = pipePalette();
   for (const p of pipes) drawPipe(p, pal);
   ctx.globalAlpha = 1;
+  drawBoss();
+  drawBullets();
   birds.forEach(drawBird);
   drawParticles();
   drawHUD();
+  drawBossUI();
  
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
@@ -690,13 +940,6 @@ function drawScene() {
     ctx.fillStyle = "#ffd23f";
     ctx.font = "bold 22px system-ui";
     ctx.fillText("x" + mult, canvas.width / 2 + 55, 68);
-  }
-  if (onlineCount > 0) {
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.font = "bold 13px system-ui";
-    ctx.textAlign = "left";
-    ctx.fillText("● " + onlineCount + " online", 10, 20);
-    ctx.textAlign = "center";
   }
   if (msg) {
     ctx.globalAlpha = Math.min(1, msg.t * 2);
