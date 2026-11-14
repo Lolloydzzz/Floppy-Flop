@@ -121,9 +121,9 @@ function logOut() {
  
 // ---- Profile pictures ----
 function pfpSrc(p) {   // only trust our own two formats
-  if (typeof p === "string" && p.startsWith("skin:")) return (SKINS.find(s => s.id === p.slice(5)) || SKINS[0]).src;
+  if (typeof p === "string" && p.startsWith("skin:")) return (AVATARS.find(s => s.id === p.slice(5)) || AVATARS[0]).src;
   if (typeof p === "string" && p.startsWith("data:image/jpeg;base64,")) return p;
-  return SKINS[0].src;
+  return AVATARS[0].src;
 }
  
 function resizeImage(file) {   // square-crop to 96x96 so it stays tiny
@@ -181,7 +181,7 @@ function buildUI() {
      <button id="profBtn" class="alt">Profile</button><button id="outBtn" class="alt">Log out</button>`;
   menu.prepend(bar);
  
-  SKINS.forEach(s => {
+  AVATARS.forEach(s => {
     const b = document.createElement("button");
     b.className = "face";
     b.innerHTML = `<img src="${s.src}" alt="${s.name}">`;
