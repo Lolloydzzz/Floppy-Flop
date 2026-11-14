@@ -64,6 +64,13 @@ let ab, invuln, gapNow, gapTarget, mult, msg;
 // ---- Leaderboard (shared online via Firebase) ----
 const DB_URL = "https://floppyflop-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app";
 
+// fetch that gives up after 6 seconds so the game never hangs
+function fetchTimeout(url, opts = {}, ms = 6000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctl.signal }).finally(() => clearTimeout(timer));
+}
+
 function userKey(name) {
   // Firebase keys can't contain . $ # [ ] /
   return name.toLowerCase().replace(/[.$#\[\]\/\s]/g, "_");
@@ -71,7 +78,7 @@ function userKey(name) {
 
 async function loadBoard() {
   try {
-    const res = await fetch(`${DB_URL}/scores.json`);
+    const res = await fetchTimeout(`${DB_URL}/scores.json`);
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     return Object.values(data || {})
@@ -86,10 +93,10 @@ async function saveScore(name, skinId, pts) {
   if (pts <= 0) return;
   const url = `${DB_URL}/scores/${encodeURIComponent(userKey(name))}.json`;
   try {
-    const res = await fetch(url);
+    const res = await fetchTimeout(url);
     const mine = await res.json();
     if (mine && mine.score >= pts) return; // keep personal best only
-    await fetch(url, {
+    await fetchTimeout(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, skin: skinId, score: pts }),
@@ -283,8 +290,10 @@ function flap() {
  
 function gameOver() {
   state = "over";
-  const saved = saveScore(player, selected.id, score);
-  setTimeout(() => saved.then(() => showMenu(score)), 700);
+  // Show the menu no matter what, then save the score in the background
+  // and refresh the board once it is saved.
+  setTimeout(() => showMenu(score), 700);
+  saveScore(player, selected.id, score).then(() => { if (!menu.hidden) renderBoard(); });
 }
  
 function die(b) {
