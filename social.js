@@ -1,7 +1,7 @@
 // social.js - accounts, login and profiles (phase 1)
 // Load this AFTER game.js. It uses Firebase Authentication over REST.
  
-const API_KEY = "PASTE_YOUR_WEB_API_KEY_HERE";   // Firebase console > Project settings > Web API Key
+const API_KEY = "AIzaSyAX4LYMj9TvP1i5ud7qcaZE718s2s7td-A";   // Firebase console > Project settings > Web API Key
 const AUTH_URL = "https://identitytoolkit.googleapis.com/v1/accounts";
 const TOKEN_URL = "https://securetoken.googleapis.com/v1/token";
 const Social = { user: null }; // { uid, name, bio, pfp, idToken, refreshToken, expires }
