@@ -23,3 +23,21 @@
 .pick input { width: 18px !important; height: 18px; flex: none; margin: 0 !important; padding: 0 !important; }
 .tabs button { font-size: 12px !important; }
 #socbar .bdg.gb { right: auto; left: -4px; background: #3d8bff; }
+
+/* reactions + replies */
+.bub { cursor: pointer; }
+.bub .quote { border-left: 3px solid rgba(0,0,0,0.35); background: rgba(0,0,0,0.12); padding: 3px 6px; border-radius: 6px; margin-bottom: 4px; font-size: 12px; text-align: left; }
+.bub.theirs .quote { border-left-color: #ffd23f; background: rgba(255,255,255,0.08); }
+.bub .quote b { display: block; font-size: 11px; }
+.bub .quote span { opacity: 0.85; }
+.bub .rx { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.bub .chip { padding: 1px 7px; font-size: 12px; font-weight: normal; border: 1px solid rgba(255,255,255,0.25); border-radius: 10px; background: rgba(0,0,0,0.2); color: inherit; cursor: pointer; }
+.bub.mine .chip { border-color: rgba(0,0,0,0.35); }
+.bub .chip.mine { background: rgba(255,210,63,0.4); border-color: #ffd23f; }
+.bub .acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.bub .acts button { padding: 3px 6px; font-size: 16px; font-weight: normal; border: 0; border-radius: 8px; background: rgba(0,0,0,0.25); color: inherit; cursor: pointer; }
+.bub .acts button.rep { font-size: 12px; font-weight: bold; }
+.rbar { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 4px 8px; background: #0f1b27; border-left: 3px solid #ffd23f; border-radius: 6px; font-size: 12px; text-align: left; }
+.rbar[hidden] { display: none; }
+.rbar span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#chat .rbar button, #gchat .rbar button { padding: 2px 8px; font-size: 12px; }
