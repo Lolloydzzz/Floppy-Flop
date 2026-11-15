@@ -33,7 +33,7 @@ const ABILITIES = {
   penerz:  { name: "Phase Leap",    cd: 15, manual: true,  charges: 3, desc: "Turn into a ghost and fly straight through the next 3 traps.", cdNote: "15s after the 3rd trap" },
   renxu:   { name: "Double Score",  cd: 20, manual: true,  duration: 15, desc: "Everything you score counts double for 15 seconds. Dodge as many traps as you can!", cdNote: "20s after it ends" },
   ven:     { name: "Clone",         cd: 15, manual: false, desc: "Passive. A clone flies beside you, so you only lose when both of you crash. A lost clone comes back after the cooldown.", cdNote: "15s after a bird is lost" },
-  zigvin:  { name: "Pipe Smasher",  cd: 15, manual: true,  charges: 3, desc: "Charge up, then smash and destroy the next 3 traps you touch.", cdNote: "15s after the 3rd trap" },
+  zigvin:  { name: "Trap Smasher",  cd: 15, manual: true,  charges: 3, desc: "Charge up, then smash and destroy the next 3 traps you touch.", cdNote: "15s after the 3rd trap" },
   emanski: { name: "Big Gap",       cd: 15, manual: true,  duration: 5, desc: "Shrinks every trap for 5 seconds, so squeezing through is much easier.", cdNote: "15s after it ends" },
   lloydie: { name: "Time Reversal", cd: 15, manual: false, desc: "Passive. After a crash, time rewinds and you come back to life, but you lose 2 points.", cdNote: "15s after it is used" },
 };
