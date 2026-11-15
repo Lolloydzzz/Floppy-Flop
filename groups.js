@@ -22,7 +22,7 @@ function buildGroupUI() {
   tab.dataset.tab = "groups";
   tab.append(el("i", { id: "bdgGroupsTab", className: "bdg", hidden: true }));
   tab.onclick = () => setTab("groups");
-  $("soc").querySelector(".tabs").append(tab);
+  $("soc").querySelector('.tabs [data-tab="chats"]').after(tab);   // right next to Chats
   document.querySelector('#socbar [data-open="chats"]').append(el("i", { id: "bdgGroupsBtn", className: "bdg gb", hidden: true }));
 
   ["gnName", "gInput"].forEach(id => $(id).addEventListener("keydown", e => e.stopPropagation()));
