@@ -1,5 +1,5 @@
 // Service worker: lets the game be installed. Online it always loads the newest files; offline it uses saved copies.
-const CACHE = "ff-v6";
+const CACHE = "ff-v7";
 const FILES = ["./", "index.html", "style.css", "social.css", "social2.css", "extras.css", "theme.css", "skins.js", "avatars.js",
   "game.js", "social.js", "social2.js", "admin.js", "extras.js", "groups.js", "robot.js", "extras2.js", "anticheat.js",
   "acct-guard.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
