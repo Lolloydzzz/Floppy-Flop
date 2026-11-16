@@ -143,20 +143,27 @@ async function resetAccount(key, uid, label) {
       [`users/${uid}`]: null,
       [`scores/${uid}`]: null,
       [`presence2/${uid}`]: null,
-      [`friends/${uid}`]: null,
-      [`inbox/${uid}`]: null,
       [`requests/${uid}`]: null,
       [`gens/${key}`]: (Number(gen) || 1) + 1,
     };
     if (sc && sc.score > 0) upd[`recover/${key}`] = { score: sc.score, skin: sc.skin || "xyruz" };
-    Object.keys(fr || {}).forEach(f => { upd[`friends/${f}/${uid}`] = null; upd[`inbox/${f}/${uid}`] = null; });
+
+    // IMPORTANT: the rules only allow an admin to delete *children* of friends/ and inbox/.
+    // Writing friends/{uid} or inbox/{uid} = null is denied and would fail the whole PATCH,
+    // so every friend link is removed one by one instead.
+    Object.keys(fr || {}).forEach(f => {
+      upd[`friends/${uid}/${f}`] = null;
+      upd[`friends/${f}/${uid}`] = null;
+      upd[`inbox/${f}/${uid}`] = null;
+    });
+
     await rdb("", "PATCH", upd);
     Soc2.profiles.delete(uid);
     Adm.names = null;
     admSay(label + " can now sign up again with the same username.");
     renderPlayers();
   } catch {
-    admSay("Reset failed. Check that the new rules are published.");
+    admSay("Reset failed. Try again in a moment.");
   }
 }
 
