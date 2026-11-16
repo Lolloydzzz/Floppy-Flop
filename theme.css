@@ -1,0 +1,117 @@
+/* theme.css - the look of Floppy Flop (colors, rounded cards, buttons, animations).
+   Loaded LAST. To go back to the old look, delete the <link> to this file in index.html. */
+
+:root { --gold: #ffd23f; --muted: #9bb4cc; --line: rgba(255,255,255,0.09); --card: rgba(255,255,255,0.055); }
+
+/* ---- page + game frame ---- */
+body {
+  background: radial-gradient(ellipse 120% 80% at 50% -10%, #2b4a74 0%, #172a45 45%, #0b1626 100%) fixed;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
+  color: #dbe9f7;
+}
+canvas { border-radius: 18px; box-shadow: 0 18px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.07); }
+#menu, .ov { border-radius: 18px; }
+#menu { background: rgba(14,26,44,0.9); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding: 16px 18px 22px; }
+.ov { background: linear-gradient(180deg, #14233a 0%, #0e1a2c 100%); box-shadow: inset 0 0 0 1px var(--line); }
+.hint { font-size: 13px; opacity: 0.7; margin-top: 16px; }
+
+/* screens slide in softly */
+.ov:not([hidden]) { animation: ovIn 0.18s ease-out; }
+@keyframes ovIn { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
+
+/* thin dark scrollbars (no more bright white bar) */
+* { scrollbar-width: thin; scrollbar-color: #35506f transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #35506f; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---- titles + labels ---- */
+h1 {
+  font-size: 30px; letter-spacing: 0.5px; margin: 6px 0 12px;
+  background: linear-gradient(90deg, #ffe066, #ff9f43); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.ov h2 { letter-spacing: 0.3px; }
+.label { text-transform: uppercase; letter-spacing: 1.6px; font-size: 11px; font-weight: 700; opacity: 0.65; margin: 18px 0 8px; }
+
+/* ---- buttons ---- */
+button { transition: transform 0.08s, filter 0.15s, background 0.15s, box-shadow 0.15s; }
+button:not(:disabled):hover { filter: brightness(1.08); }
+button:not(:disabled):active { transform: translateY(2px); }
+
+#playBtn, .ov .row > button:not(.alt), .crow button {
+  background: linear-gradient(180deg, #ffe066 0%, #ffc107 100%); color: var(--ink);
+  border-radius: 14px; font-weight: 800; letter-spacing: 0.3px; box-shadow: 0 3px 0 #b88a00;
+}
+#playBtn { width: 72%; padding: 13px 20px; font-size: 20px; margin-top: 18px; box-shadow: 0 4px 0 #b88a00, 0 12px 26px rgba(255,193,7,0.28); }
+#playBtn:active { box-shadow: 0 1px 0 #b88a00; }
+.ov button.alt, #acct button.alt, .shead button, .chead button {
+  background: linear-gradient(180deg, #2d4767, #223a57); color: #dbe9f7; border-radius: 12px; box-shadow: 0 2px 0 #14233a;
+}
+.ov button.mini { border-radius: 10px; }
+.upload { border-radius: 12px; background: linear-gradient(180deg, #2d4767, #223a57); box-shadow: 0 2px 0 #14233a; }
+
+/* ---- inputs ---- */
+.ov input[type=text], .ov input[type=password], .ov input:not([type]), .ov textarea {
+  border-radius: 12px; border: 2px solid #2f4a6b; background: #0b1626; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ov input:focus, .ov textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,210,63,0.2); }
+.ov input::placeholder, .ov textarea::placeholder { color: #6f89a3; }
+
+/* ---- skill tiles + info ---- */
+#skinGrid { gap: 10px; }
+.skin {
+  background: linear-gradient(180deg, #1a2e48, #122238); border: 2px solid var(--line); border-radius: 14px;
+  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.skin:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.22); }
+.skin.selected { border-color: var(--gold); background: linear-gradient(180deg, #27436a, #182c47); box-shadow: 0 0 0 3px rgba(255,210,63,0.18), 0 8px 18px rgba(0,0,0,0.35); }
+.skin.skill .ico { font-size: 28px; }
+.skin.skill span:last-child { font-weight: 600; font-size: 12px; }
+#skinInfo { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 12px; padding: 10px 12px; }
+
+/* ---- account bar + shortcut buttons ---- */
+#acct { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+#acct img { width: 44px; height: 44px; box-shadow: 0 0 0 2px var(--gold); }
+#socbar { gap: 8px; margin: 2px 0 12px; }
+#socbar button { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 4px; color: #dbe9f7; }
+#socbar button:hover { background: rgba(255,255,255,0.1); }
+#admbar button { border-radius: 12px; background: linear-gradient(180deg, #8a4646, #6e3535); }
+
+/* ---- leaderboard ---- */
+#board li { background: var(--card); border: 0; border-radius: 12px; padding: 7px 10px; margin-bottom: 5px; }
+#board img { width: 28px; height: 28px; box-shadow: 0 0 0 2px rgba(255,255,255,0.15); }
+#board .rank { width: 22px; font-weight: 800; }
+#board li:nth-child(1) .rank { color: #ffd23f; opacity: 1; }
+#board li:nth-child(2) .rank { color: #d3dbe6; opacity: 1; }
+#board li:nth-child(3) .rank { color: #e0a06a; opacity: 1; }
+#board li:nth-child(1) { background: linear-gradient(90deg, rgba(255,210,63,0.16), rgba(255,255,255,0.04)); }
+
+/* ---- tabs as a segmented control ---- */
+.tabs { background: rgba(0,0,0,0.28); padding: 4px; border-radius: 14px; gap: 2px; }
+.tabs button { background: transparent !important; color: var(--muted) !important; border-radius: 10px !important; }
+.tabs button.on { background: linear-gradient(180deg, #ffe066, #ffc107) !important; color: var(--ink) !important; box-shadow: 0 2px 0 #b88a00; }
+
+/* ---- people lists ---- */
+.urow { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 9px 10px; transition: background 0.12s; }
+.urow.click:hover { background: rgba(255,255,255,0.1); }
+.urow img { box-shadow: 0 0 0 2px rgba(255,255,255,0.12); }
+
+/* ---- chat ---- */
+#chatLog, #gLog { background: rgba(0,0,0,0.26); border: 1px solid var(--line); border-radius: 16px; padding: 10px; }
+.bub { border-radius: 16px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+.bub.mine { background: linear-gradient(180deg, #ffe066, #ffc83a); border-bottom-right-radius: 5px; }
+.bub.theirs { background: #26405f; border-bottom-left-radius: 5px; }
+.ov .crow input { border-radius: 22px; padding: 11px 16px; }
+.crow button { border-radius: 22px; }
+.chead img { box-shadow: 0 0 0 2px var(--gold); }
+
+/* ---- tools bar ---- */
+#tools button { border-radius: 20px; background: var(--card); border: 1px solid var(--line); }
+
+/* ---- phones ---- */
+@media (max-width: 480px) {
+  #menu, .ov { padding-left: 14px; padding-right: 14px; }
+  h1 { font-size: 26px; }
+  #playBtn { width: 80%; }
+}
