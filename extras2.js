@@ -64,10 +64,13 @@ function msgBubble(m, mid, mine, rmap, target, sender) {
   });
   b.addEventListener("pointermove", e => { if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) stop(); });   // scrolling
   ["pointerup", "pointerleave", "pointercancel"].forEach(t => b.addEventListener(t, stop));
-  b.addEventListener("contextmenu", e => { e.preventDefault(); stop(); held = true; openMenu(wrap, rmap, target, mid, mineR); });   // right-click on a computer
+  b.addEventListener("contextmenu", e => { e.preventDefault(); stop(); held = true; if (!wrap.querySelector(".rbar")) openMenu(wrap, rmap, target, mid, mineR); });   // phones send this after a long press; also right-click on a computer
   b.onclick = () => { if (held) { held = false; return; } closePanels(); };   // a plain tap just closes any open menu
   return wrap;
 }
+
+const menuOpen = () => !!document.querySelector(".rbar, .who");
+document.addEventListener("click", e => { if (!(e.target.closest && e.target.closest(".msgwrap"))) closePanels(); });
 
 function closePanels() { document.querySelectorAll(".rbar, .who").forEach(x => x.remove()); }
 
@@ -99,9 +102,7 @@ function toggleWho(wrap, rmap, target, mid, mineR) {
 
 // holding a message: emoji picker + who reacted
 function openMenu(wrap, rmap, target, mid, mineR) {
-  const had = wrap.querySelector(".rbar");
   closePanels();
-  if (had) return;
   const bar = el("div", { className: "rbar" });
   REACTS.forEach(e => {
     const x = el("button", { className: mineR === e ? "on" : "", textContent: e });
@@ -113,6 +114,7 @@ function openMenu(wrap, rmap, target, mid, mineR) {
 }
 
 async function react(target, mid, emoji, current) {
+  closePanels();
   const base = target.kind === "dm" ? `reactions/${target.id}` : `groupReactions/${target.id}`;
   const path = `${base}/${mid}/${meId()}`;
   const note = target.kind === "dm" ? $("chatMsg") : $("gMsg");
@@ -149,7 +151,7 @@ loadMessages = async function (first) {
   const sig = keys.length + ":" + (keys[keys.length - 1] || "") + ":" + JSON.stringify(reacts);
   const log = $("chatLog");
 
-  if (sig !== Soc2.chatSig) {
+  if (sig !== Soc2.chatSig && !menuOpen()) {
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 70;
     if (!keys.length) log.replaceChildren(empty("Say hi! Hold a message to react."));
     else log.replaceChildren(...keys.map(k => msgBubble(data[k], k, data[k].from === me, reacts[k], { kind: "dm", id: cid }, null)));
@@ -180,7 +182,7 @@ loadG = async function (first) {
   const keys = Object.keys(data).sort(), me = meId(), log = $("gLog");
   const sig = keys.length + ":" + (keys[keys.length - 1] || "") + ":" + JSON.stringify(reacts);
 
-  if (sig !== GR.sig) {
+  if (sig !== GR.sig && !menuOpen()) {
     const near = log.scrollHeight - log.scrollTop - log.clientHeight < 70;
     const senders = [...new Set(keys.map(k => data[k].from))];
     const profs = await Promise.all(senders.map(getProfile));
