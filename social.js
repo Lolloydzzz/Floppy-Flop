@@ -1,11 +1,11 @@
 // social.js - accounts, login and profiles (phase 1)
 // Load this AFTER game.js. It uses Firebase Authentication over REST.
- 
+
 const API_KEY = "AIzaSyAX4LYMj9TvP1i5ud7qcaZE718s2s7td-A";   // Firebase console > Project settings > Web API Key
 const AUTH_URL = "https://identitytoolkit.googleapis.com/v1/accounts";
 const TOKEN_URL = "https://securetoken.googleapis.com/v1/token";
 const Social = { user: null }; // { uid, name, bio, pfp, idToken, refreshToken, expires }
- 
+
 const AUTH_ERRORS = {
   EMAIL_EXISTS: "That username is already taken.",
   INVALID_LOGIN_CREDENTIALS: "Wrong username or password.",
@@ -15,7 +15,7 @@ const AUTH_ERRORS = {
   OPERATION_NOT_ALLOWED: "Email/Password sign-in is not turned on in Firebase yet.",
   TOO_MANY_ATTEMPTS_TRY_LATER: "Too many tries. Wait a bit and try again.",
 };
- 
+
 // Users log in with a username; Firebase needs an email, so we build a fake one.
 // After an admin resets an account, the username gets a new "generation" so it can sign up again.
 const emailFor = (name, gen) => name.toLowerCase() + (gen > 1 ? "." + gen : "") + "@floppyflop.app";
@@ -27,7 +27,7 @@ async function genFor(name) {
   return 1;
 }
 const validName = name => /^[A-Za-z0-9_]{3,12}$/.test(name);
- 
+
 // ---- Talking to Firebase ----
 async function authCall(action, body) {
   if (API_KEY.startsWith("PASTE")) throw new Error("The Firebase Web API key is missing in social.js.");
@@ -48,7 +48,7 @@ async function authCall(action, body) {
   }
   return data;
 }
- 
+
 function setTokens(d) {
   const u = Social.user;
   u.idToken = d.idToken || d.id_token;
@@ -56,7 +56,7 @@ function setTokens(d) {
   u.expires = Date.now() + (Number(d.expiresIn || d.expires_in) - 60) * 1000;
   try { localStorage.setItem("ff_session", JSON.stringify({ uid: u.uid, name: u.name, refreshToken: u.refreshToken })); } catch {}
 }
- 
+
 async function token() {            // always returns a fresh login token
   const u = Social.user;
   if (Date.now() > u.expires) {
@@ -71,7 +71,7 @@ async function token() {            // always returns a fresh login token
   }
   return u.idToken;
 }
- 
+
 async function dbCall(path, method = "GET", body) {   // database call as the logged-in user
   const t = await token();
   const res = await fetchTimeout(`${DB_URL}/${path}.json?auth=${t}`, {
@@ -82,7 +82,7 @@ async function dbCall(path, method = "GET", body) {   // database call as the lo
   if (!res.ok) throw new Error("Database error " + res.status);
   return res.json();
 }
- 
+
 // ---- Account actions ----
 async function loadProfile() {
   const u = Social.user;
@@ -95,7 +95,7 @@ async function loadProfile() {
   }
   u.name = p.name; u.bio = p.bio || ""; u.pfp = p.pfp || "skin:xyruz";
 }
- 
+
 async function signUp(name, pass) {
   const d = await authCall("signUp", { email: emailFor(name, await genFor(name)), password: pass });
   Social.user = { uid: d.localId, name, bio: "", pfp: "skin:" + selected.id };
@@ -112,14 +112,14 @@ async function signUp(name, pass) {
     }
   } catch {}
 }
- 
+
 async function logIn(name, pass) {
   const d = await authCall("signInWithPassword", { email: emailFor(name, await genFor(name)), password: pass });
   Social.user = { uid: d.localId, name };
   setTokens(d);
   await loadProfile();
 }
- 
+
 async function autoLogin() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem("ff_session")); } catch {}
@@ -128,21 +128,21 @@ async function autoLogin() {
   try { await token(); await loadProfile(); return true; }
   catch { Social.user = null; return false; }
 }
- 
+
 function logOut() {
   try { localStorage.removeItem("ff_session"); } catch {}
   Social.user = null;
   $("authPass").value = "";
   showAuth();
 }
- 
+
 // ---- Profile pictures ----
 function pfpSrc(p) {   // only trust our own two formats
   if (typeof p === "string" && p.startsWith("skin:")) return (AVATARS.find(s => s.id === p.slice(5)) || AVATARS[0]).src;
   if (typeof p === "string" && p.startsWith("data:image/jpeg;base64,")) return p;
   return AVATARS[0].src;
 }
- 
+
 function resizeImage(file) {   // square-crop to 96x96 so it stays tiny
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -159,14 +159,14 @@ function resizeImage(file) {   // square-crop to 96x96 so it stays tiny
     img.src = url;
   });
 }
- 
+
 // ---- Screens ----
 const $ = id => document.getElementById(id);
 let draftPfp = "";
- 
+
 function buildUI() {
   const stage = $("stage");
- 
+
   const auth = document.createElement("div");
   auth.id = "auth"; auth.className = "ov";
   auth.innerHTML =
@@ -177,7 +177,7 @@ function buildUI() {
      <div class="row"><button id="loginBtn">Log in</button><button id="signupBtn" class="alt">Sign up</button></div>
      <p class="sub small">Keep your password safe. If you forget it, ask the admin to reset your account, then sign up again with the same username.</p>`;
   stage.appendChild(auth);
- 
+
   const prof = document.createElement("div");
   prof.id = "prof"; prof.className = "ov"; prof.hidden = true;
   prof.innerHTML =
@@ -190,14 +190,14 @@ function buildUI() {
      <p id="profMsg" class="msg"></p>
      <div class="row"><button id="profSave">Save</button><button id="profClose" class="alt">Close</button></div>`;
   stage.appendChild(prof);
- 
+
   const bar = document.createElement("div");
   bar.id = "acct";
   bar.innerHTML =
     `<img id="acctPfp" alt=""><div class="who"><b id="acctName"></b><small id="acctBio"></small></div>
      <button id="profBtn" class="alt">Profile</button><button id="outBtn" class="alt">Log out</button>`;
   menu.prepend(bar);
- 
+
   AVATARS.forEach(s => {
     const b = document.createElement("button");
     b.className = "face";
@@ -205,7 +205,7 @@ function buildUI() {
     b.onclick = () => { draftPfp = "skin:" + s.id; $("profPfp").src = s.src; };
     $("profFaces").appendChild(b);
   });
- 
+
   const submit = fn => async () => {
     const name = $("authName").value.trim(), pass = $("authPass").value;
     if (!validName(name)) { $("authMsg").textContent = "Username: 3-12 letters, numbers or _ only."; return; }
@@ -217,7 +217,7 @@ function buildUI() {
   $("loginBtn").onclick = submit(logIn);
   $("signupBtn").onclick = submit(signUp);
   $("authPass").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
- 
+
   $("outBtn").onclick = logOut;
   $("profBtn").onclick = openProfile;
   $("profClose").onclick = () => { $("prof").hidden = true; };
@@ -238,9 +238,9 @@ function buildUI() {
     } catch { $("profMsg").textContent = "Couldn't save. Try again."; }
   };
 }
- 
+
 function showAuth() { $("authMsg").textContent = ""; $("prof").hidden = true; $("auth").hidden = false; }
- 
+
 function openProfile() {
   const u = Social.user;
   draftPfp = u.pfp;
@@ -249,22 +249,44 @@ function openProfile() {
   $("profMsg").textContent = "";
   $("prof").hidden = false;
 }
- 
+
+// The account bar at the top of the menu. Older cached copies of the page/script
+// can leave #acct without the .who block, which makes the name and bio disappear
+// and the Profile/Log out buttons squeeze up against the avatar. Rebuilding it
+// here means the bar always repairs itself when someone logs in.
 function refreshAcct() {
   const u = Social.user;
-  $("acctPfp").src = pfpSrc(u.pfp);
-  $("acctName").textContent = u.name;
-  $("acctBio").textContent = u.bio || "No bio yet";
+  const bar = $("acct");
+  if (!bar || !u) return;
+
+  let who = bar.querySelector(".who");
+  if (!who) {
+    who = document.createElement("div");
+    who.className = "who";
+    who.style.cssText = "flex:1 1 auto;min-width:0;display:flex;flex-direction:column;";
+    const firstBtn = bar.querySelector("button");
+    bar.insertBefore(who, firstBtn || null);
+  }
+
+  let name = who.querySelector("b");
+  if (!name) { name = document.createElement("b"); name.id = "acctName"; who.prepend(name); }
+  let bio = who.querySelector("small");
+  if (!bio) { bio = document.createElement("small"); bio.id = "acctBio"; who.append(bio); }
+
+  const pic = $("acctPfp");
+  if (pic) pic.src = pfpSrc(u.pfp);
+  name.textContent = u.name || "Player";
+  bio.textContent = u.bio || "No bio yet";
 }
- 
+
 function enterGame() {
   $("auth").hidden = true;
   refreshAcct();
 }
- 
+
 // ---- Hook into the game (game.js stays untouched) ----
 nameInput.style.display = "none";   // the old username box isn't needed anymore
- 
+
 playBtn.onclick = () => {
   if (!Social.user) { showAuth(); return; }
   player = Social.user.name;
@@ -272,7 +294,7 @@ playBtn.onclick = () => {
   menu.hidden = true;
   resetGame();
 };
- 
+
 saveScore = async function (name, skinId, pts) {   // scores are now saved per account
   if (pts <= 0 || !Social.user) return;
   try {
@@ -282,6 +304,6 @@ saveScore = async function (name, skinId, pts) {   // scores are now saved per a
     await dbCall(path, "PUT", { name: Social.user.name, skin: skinId, score: pts });
   } catch {}
 };
- 
+
 buildUI();
 autoLogin().then(ok => { if (ok) enterGame(); else showAuth(); });
