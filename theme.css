@@ -1,7 +1,7 @@
 /* theme.css - the look of Floppy Flop (colors, rounded cards, buttons, animations).
    Loaded LAST. To go back to the old look, delete the <link> to this file in index.html. */
 
-:root { --gold: #ffd23f; --muted: #9bb4cc; --line: rgba(255,255,255,0.09); --card: rgba(255,255,255,0.055); }
+:root { --gold: #ffd23f; --muted: #9bb4cc; --line: rgba(255,255,255,0.09); --card: rgba(255,255,255,0.055); --ink: #1d2b3a; }
 
 /* ---- page + game frame ---- */
 body {
