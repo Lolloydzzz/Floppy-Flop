@@ -2,7 +2,7 @@
 // Load this LAST (after admin.js).
 
 // ---------- 1. Pick a skill (no more characters) ----------
-const ICONS = { xyruz: "🌀", nogz: "❤️", penerz: "👻", renxu: "✨", ven: "👯", zigvin: "💥", emanski: "↔️", lloydie: "⏪" };
+const ICONS = { xyruz: "🌀", nogz: "❤️", penerz: "👻", renxu: "✨", ven: "👯", zigvin: "💥", emanski: "▪️", lloydie: "⏪" };
 
 menu.querySelector(".label").textContent = "Pick your skill";
 showInfo = function () {
