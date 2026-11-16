@@ -43,5 +43,23 @@
 <script src="robot.js?v=1"></script>
 <script src="extras2.js?v=5"></script>
 <script src="anticheat.js?v=1"></script>
+<script src="skilltext.js?v=1"></script>
+<script src="who.js?v=1"></script>
+<script>
+// stop double-tap and pinch zoom on phones (the game itself flaps on pointerdown, so it is not affected)
+document.addEventListener("dblclick", e => e.preventDefault());
+["gesturestart", "gesturechange", "gestureend"].forEach(n => document.addEventListener(n, e => e.preventDefault()));
+let lastTap = 0;
+document.addEventListener("touchend", e => {
+  if (e.target.closest && e.target.closest("canvas")) {
+    const now = Date.now();
+    if (now - lastTap < 350) e.preventDefault();
+    lastTap = now;
+  }
+}, { passive: false });
+</script>
+</body>
+</html>
+
 </body>
 </html>
