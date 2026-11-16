@@ -237,7 +237,7 @@ async function renderTab() {
       .map(({ uid, p }) => {
         const btn = el("button", { className: "mini", textContent: "Chat" });
         btn.onclick = e => { e.stopPropagation(); openChat(uid); };
-        return userRow(uid, p, p.bio || "", btn, () => openProfile(uid));
+        return userRow(uid, p, p.bio || "", btn, () => openPlayer(uid));
       });
   }
 
@@ -251,10 +251,11 @@ async function renderTab() {
       const no = el("button", { className: "mini alt", textContent: "Decline" });
       ok.onclick = async e => { e.stopPropagation(); ok.disabled = no.disabled = true; try { await acceptRequest(uid); } catch { ok.disabled = no.disabled = false; } await refreshSocial(); renderTab(); };
       no.onclick = async e => { e.stopPropagation(); ok.disabled = no.disabled = true; try { await rdb(`requests/${meId()}/${uid}`, "DELETE"); } catch { ok.disabled = no.disabled = false; } await refreshSocial(); renderTab(); };
-      return userRow(uid, profs[n], "wants to be friends", el("div", { className: "btns" }, ok, no), () => openProfile(uid));
+      return userRow(uid, profs[n], "wants to be friends", el("div", { className: "btns" }, ok, no), () => openPlayer(uid));
     });
   }
 
+  if (id !== Soc2.renderId) return;   // a newer render already took over
   body.replaceChildren(...rows);
 }
 
@@ -267,7 +268,8 @@ async function runSearch() {
   if (!/^[a-z0-9_]{1,12}$/.test(q)) { box.replaceChildren(empty("Usernames use letters, numbers and _ only.")); return; }
   box.replaceChildren(empty("Searching..."));
   try {
-    const qs = `&orderBy=${enc('"$key"')}&startAt=${enc('"' + q + '"')}&endAt=${enc('"' + q + "" + '"')}&limitToFirst=10`;
+    // endAt must be a little "higher" than the typed text, otherwise only an exact username matches
+    const qs = `&orderBy=${enc('"$key"')}&startAt=${enc('"' + q + '"')}&endAt=${enc('"' + q + '\uf8ff' + '"')}&limitToFirst=10`;
     const data = (await rdb("usernames", "GET", undefined, qs)) || {};
     const me = meId();
     const ids = Object.values(data).filter(uid => uid !== me);
@@ -275,7 +277,7 @@ async function runSearch() {
     if (!ids.length) { box.replaceChildren(empty("No players found.")); return; }
     const profs = await Promise.all(ids.map(getProfile));
     if (id !== Soc2.searchId) return;
-    box.replaceChildren(...ids.map((uid, n) => userRow(uid, profs[n], profs[n].bio || "", null, () => openProfile(uid))));
+    box.replaceChildren(...ids.map((uid, n) => userRow(uid, profs[n], profs[n].bio || "", null, () => openPlayer(uid))));
   } catch {
     if (id === Soc2.searchId) box.replaceChildren(empty("Couldn't search. Check your connection."));
   }
@@ -299,8 +301,8 @@ async function relationTo(uid) {
   return "none";
 }
 
-// ---- Profile view ----
-async function openProfile(uid) {
+// ---- Player profile view ----
+async function openPlayer(uid) {
   hideViews();
   $("pview").hidden = false;
   const pName = $("pName"), pBio = $("pBio"), pScore = $("pScore"), acts = $("pActions"), msg = $("pMsg");
