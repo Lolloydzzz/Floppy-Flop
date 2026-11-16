@@ -9,6 +9,7 @@ const Soc2 = {
   tab: "chats",
   chatWith: null,
   chatTimer: null,
+  chatWatch: null,
   chatSig: "",
   renderId: 0,
   searchId: 0,
@@ -47,6 +48,18 @@ async function rdb(path, method = "GET", body, query = "") {
   });
   if (!res.ok) throw new Error("Database error " + res.status);
   return res.json();
+}
+
+// Give every chat request a hard time limit, so a stalled connection can't
+// leave the log stuck on "Loading..." forever.
+function withTimeout(promise, ms, message) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message || "Timed out")), ms);
+    promise.then(
+      v => { clearTimeout(t); resolve(v); },
+      e => { clearTimeout(t); reject(e); }
+    );
+  });
 }
 
 async function getProfile(uid) {
@@ -365,8 +378,42 @@ function drawActions(uid, rel) {
 }
 
 // ---- Chat ----
+// Every request is time-limited and every failure is shown in the chat window,
+// so it can never sit on "Loading..." forever.
+function chatProblem(text) {
+  const log = $("chatLog");
+  if (!log) return;
+  const retry = el("button", { className: "mini", textContent: "Retry" });
+  retry.onclick = () => {
+    log.replaceChildren(empty("Loading..."));
+    Soc2.chatSig = "";
+    loadMessages(true);
+  };
+  log.replaceChildren(empty(text), retry);
+  console.warn("[chat] " + text);
+}
+
+async function fetchMessages(me, them) {
+  const path = `chats/${chatId(me, them)}/messages`;
+  try {
+    return await withTimeout(
+      rdb(path, "GET", undefined, `&orderBy=${enc('"$key"')}&limitToLast=60`),
+      10000, "The chat server did not answer"
+    );
+  } catch (e) {
+    // Some rule setups reject ordered queries; try one plain read before giving up.
+    if (!/400|index/i.test((e && e.message) || "")) throw e;
+    const raw = await withTimeout(rdb(path, "GET"), 10000, "The chat server did not answer");
+    const all = raw || {};
+    const keys = Object.keys(all).sort().slice(-60);
+    const out = {};
+    keys.forEach(k => { out[k] = all[k]; });
+    return out;
+  }
+}
+
 async function openChat(uid) {
-  if (!Soc2.friends[uid]) return;
+  if (!Soc2.friends[uid] || !Social.user) return;
   stopChat();
   hideViews();
   $("chat").hidden = false;
@@ -382,6 +429,12 @@ async function openChat(uid) {
     $("chatName").textContent = p.name;
     $("chatPfp").src = pfpSrc(p.pfp);
   });
+  // watchdog: whatever happens, the "Loading..." text is replaced
+  Soc2.chatWatch = setTimeout(() => {
+    if (Soc2.chatWith === uid && Soc2.chatSig === "" && !$("chat").hidden) {
+      chatProblem("The chat is taking too long to load.");
+    }
+  }, 12000);
   loadMessages(true);
   Soc2.chatTimer = setInterval(() => loadMessages(false), 2500);
   $("chatInput").focus();
@@ -390,25 +443,32 @@ async function openChat(uid) {
 function stopChat() {
   clearInterval(Soc2.chatTimer);
   Soc2.chatTimer = null;
+  clearTimeout(Soc2.chatWatch);
+  Soc2.chatWatch = null;
   Soc2.chatWith = null;
 }
 
 async function loadMessages(first) {
   const them = Soc2.chatWith;
-  if (!them || !Social.user || document.hidden) return;
+  if (!them || !Social.user) return;
+  if (!first && document.hidden) return;   // polling pauses in the background, the first load never does
   const me = meId();
   let data;
   try {
-    data = await rdb(`chats/${chatId(me, them)}/messages`, "GET", undefined, `&orderBy=${enc('"$key"')}&limitToLast=60`);
-  } catch {
-    if (first && Soc2.chatWith === them) $("chatLog").replaceChildren(empty("Couldn't load messages."));
+    data = await fetchMessages(me, them);
+  } catch (e) {
+    console.error("[chat] load failed:", e);
+    if (Soc2.chatWith !== them || $("chat").hidden) return;
+    if (Soc2.chatSig === "") chatProblem("Couldn't load messages. " + ((e && e.message) || "Network error") + ".");
     return;
   }
-  if (Soc2.chatWith !== them) return;
+  if (Soc2.chatWith !== them || $("chat").hidden) return;
+
   data = data || {};
   const keys = Object.keys(data).sort();
   const sig = keys.length + ":" + (keys[keys.length - 1] || "");
   const log = $("chatLog");
+  clearTimeout(Soc2.chatWatch);
 
   if (sig !== Soc2.chatSig) {
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 70;
@@ -447,7 +507,7 @@ async function sendMsg() {
   const key = Date.now().toString(36).padStart(9, "0") + Math.random().toString(36).slice(2, 6);
   const preview = text.slice(0, 60);
   try {
-    await rdb("", "PATCH", {
+    await withTimeout(rdb("", "PATCH", {
       [`chats/${chatId(me, them)}/messages/${key}`]: { from: me, text, t: SV },
       [`inbox/${me}/${them}/t`]: SV,
       [`inbox/${me}/${them}/text`]: preview,
@@ -456,7 +516,7 @@ async function sendMsg() {
       [`inbox/${them}/${me}/t`]: SV,
       [`inbox/${them}/${me}/text`]: preview,
       [`inbox/${them}/${me}/from`]: me,
-    });
+    }), 12000, "Send timed out");
     input.value = "";
     await loadMessages(false);
     Soc2.chatSig = "";           // force a redraw + scroll to the new message
