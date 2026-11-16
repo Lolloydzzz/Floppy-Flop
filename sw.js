@@ -1,8 +1,8 @@
 // Service worker: lets the game be installed. Online it always loads the newest files; offline it uses saved copies.
-const CACHE = "ff-v5";
+const CACHE = "ff-v6";
 const FILES = ["./", "index.html", "style.css", "social.css", "social2.css", "extras.css", "theme.css", "skins.js", "avatars.js",
   "game.js", "social.js", "social2.js", "admin.js", "extras.js", "groups.js", "robot.js", "extras2.js", "anticheat.js",
-  "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+  "acct-guard.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => {
   // cache each file separately, so one missing file can't break the whole offline copy
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(FILES.map(f => c.add(f).catch(() => {})))));
