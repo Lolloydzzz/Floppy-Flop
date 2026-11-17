@@ -18,16 +18,16 @@ document.head.appendChild(el("style", { textContent: `
 .msgwrap.mine { align-self: flex-end; align-items: flex-end; }
 .msgwrap.theirs { align-self: flex-start; align-items: flex-start; }
 .msgwrap .bub { max-width: 100%; align-self: auto; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-.ov .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-.ov .chips .chip { padding: 1px 8px; font-size: 12px; font-weight: normal; line-height: 18px; border: 0; border-radius: 10px; background: #2c445c; color: #fff; cursor: pointer; }
-.ov .chips .chip.me { background: #ffd23f; color: #1d2b3a; }
-.ov .rbar { display: flex; gap: 2px; margin-top: 4px; padding: 3px 6px; background: #0b141d; border: 1px solid #3d5a78; border-radius: 16px; }
-.ov .rbar button { padding: 2px 4px; font-size: 18px; font-weight: normal; line-height: 1.2; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
-.ov .rbar button.on { background: #2c445c; }
-.ov .who { margin-top: 4px; padding: 6px 9px; max-width: 100%; background: #0b141d; border: 1px solid #3d5a78; border-radius: 10px; font-size: 12px; text-align: left; }
-.ov .who .whorow { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; }
-.ov .who .we { font-size: 15px; }
-.ov .who .chip { margin-top: 4px; }
+.ov .rxchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.ov .rxchips .rxchip { padding: 1px 8px; font-size: 12px; font-weight: normal; line-height: 18px; border: 0; border-radius: 10px; background: #2c445c; color: #fff; cursor: pointer; }
+.ov .rxchips .rxchip.me { background: #ffd23f; color: #1d2b3a; }
+.ov .rxbar { display: flex; gap: 2px; margin-top: 4px; padding: 3px 6px; background: #0b141d; border: 1px solid #3d5a78; border-radius: 16px; }
+.ov .rxbar button { padding: 2px 4px; font-size: 18px; font-weight: normal; line-height: 1.2; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.ov .rxbar button.on { background: #2c445c; }
+.ov .rxwho { margin-top: 4px; padding: 6px 9px; max-width: 100%; background: #0b141d; border: 1px solid #3d5a78; border-radius: 10px; font-size: 12px; text-align: left; }
+.ov .rxwho .rxrow { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; }
+.ov .rxwho .rxe { font-size: 15px; }
+.ov .rxwho .rxchip { margin-top: 4px; }
 ` }));
 
 // one message bubble with its reaction chips and the emoji picker
@@ -45,9 +45,9 @@ function msgBubble(m, mid, mine, rmap, target, sender) {
   Object.values(rmap).forEach(e => { if (REACTS.includes(e)) counts[e] = (counts[e] || 0) + 1; });
   const used = Object.keys(counts);
   if (used.length) {
-    const chips = el("div", { className: "chips" });
+    const chips = el("div", { className: "rxchips" });
     used.forEach(e => {
-      const c = el("button", { className: "chip" + (mineR === e ? " me" : ""), title: "Tap to see who reacted", textContent: counts[e] > 1 ? e + " " + counts[e] : e });
+      const c = el("button", { className: "rxchip" + (mineR === e ? " me" : ""), title: "Tap to see who reacted", textContent: counts[e] > 1 ? e + " " + counts[e] : e });
       c.onclick = ev => { ev.stopPropagation(); toggleWho(wrap, rmap, target, mid, mineR); };
       chips.append(c);
     });
@@ -64,19 +64,20 @@ function msgBubble(m, mid, mine, rmap, target, sender) {
   });
   b.addEventListener("pointermove", e => { if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) stop(); });   // scrolling
   ["pointerup", "pointerleave", "pointercancel"].forEach(t => b.addEventListener(t, stop));
-  b.addEventListener("contextmenu", e => { e.preventDefault(); stop(); held = true; if (!wrap.querySelector(".rbar")) openMenu(wrap, rmap, target, mid, mineR); });   // phones send this after a long press; also right-click on a computer
+  b.addEventListener("contextmenu", e => { e.preventDefault(); stop(); held = true; if (!wrap.querySelector(".rxbar")) openMenu(wrap, rmap, target, mid, mineR); });   // phones send this after a long press; also right-click on a computer
   b.onclick = () => { if (held) { held = false; return; } closePanels(); };   // a plain tap just closes any open menu
   return wrap;
 }
 
-const menuOpen = () => !!document.querySelector(".rbar, .who");
+const RX_SEL = ".msgwrap .rxbar, .msgwrap .rxwho";   // only inside chat messages
+const menuOpen = () => !!document.querySelector(RX_SEL);
 document.addEventListener("click", e => { if (!(e.target.closest && e.target.closest(".msgwrap"))) closePanels(); });
 
-function closePanels() { document.querySelectorAll(".rbar, .who").forEach(x => x.remove()); }
+function closePanels() { document.querySelectorAll(RX_SEL).forEach(x => x.remove()); }
 
 // the list of who reacted with what
 async function fillWho(wrap, rmap, target, mid, mineR) {
-  const box = el("div", { className: "who" }, el("small", { textContent: "Loading..." }));
+  const box = el("div", { className: "rxwho" }, el("small", { textContent: "Loading..." }));
   wrap.append(box);
   const uids = Object.keys(rmap).filter(u => REACTS.includes(rmap[u]));
   const profs = await Promise.all(uids.map(getProfile));
@@ -84,10 +85,10 @@ async function fillWho(wrap, rmap, target, mid, mineR) {
   const byEmoji = {};
   uids.forEach((u, i) => { (byEmoji[rmap[u]] = byEmoji[rmap[u]] || []).push(u === meId() ? "You" : profs[i].name); });
   const rows = Object.entries(byEmoji).map(([e, names]) =>
-    el("div", { className: "whorow" }, el("span", { className: "we", textContent: e }), el("span", { textContent: names.join(", ") })));
+    el("div", { className: "rxrow" }, el("span", { className: "rxe", textContent: e }), el("span", { textContent: names.join(", ") })));
   box.replaceChildren(...rows);
   if (mineR) {
-    const rm = el("button", { className: "chip", textContent: "Remove my " + mineR });
+    const rm = el("button", { className: "rxchip", textContent: "Remove my " + mineR });
     rm.onclick = ev => { ev.stopPropagation(); react(target, mid, mineR, mineR); };
     box.append(rm);
   }
@@ -95,7 +96,7 @@ async function fillWho(wrap, rmap, target, mid, mineR) {
 
 // tap a reaction under a message: see who reacted (tap again to close)
 function toggleWho(wrap, rmap, target, mid, mineR) {
-  const was = wrap.querySelector(".who");
+  const was = wrap.querySelector(".rxwho");
   closePanels();
   if (!was) fillWho(wrap, rmap, target, mid, mineR);
 }
@@ -103,7 +104,7 @@ function toggleWho(wrap, rmap, target, mid, mineR) {
 // holding a message: emoji picker + who reacted
 function openMenu(wrap, rmap, target, mid, mineR) {
   closePanels();
-  const bar = el("div", { className: "rbar" });
+  const bar = el("div", { className: "rxbar" });
   REACTS.forEach(e => {
     const x = el("button", { className: mineR === e ? "on" : "", textContent: e });
     x.onclick = ev => { ev.stopPropagation(); react(target, mid, e, mineR); };
@@ -134,24 +135,31 @@ const reactQuery = `&orderBy=${enc('"$key"')}&limitToLast=60`;
 // friend chat: same as before, but with reactions
 loadMessages = async function (first) {
   const them = Soc2.chatWith;
-  if (!them || !Social.user || document.hidden) return;
+  if (!them || !Social.user) return;
+  if (!first && document.hidden) return;                 // polling pauses in the background, the first load never does
   const me = meId(), cid = chatId(me, them);
   let data;
   try {
-    data = await rdb(`chats/${cid}/messages`, "GET", undefined, reactQuery);
-  } catch {
-    if (first && Soc2.chatWith === them) $("chatLog").replaceChildren(empty("Couldn't load messages."));
+    data = typeof fetchMessages === "function" ? await fetchMessages(me, them) : await rdb(`chats/${cid}/messages`, "GET", undefined, reactQuery);
+  } catch (e) {
+    console.error("[chat] load failed:", e);
+    if (Soc2.chatWith !== them || $("chat").hidden) return;
+    if (Soc2.chatSig === "") {
+      if (typeof chatProblem === "function") chatProblem("Couldn't load messages. " + ((e && e.message) || "Network error") + ".");
+      else $("chatLog").replaceChildren(empty("Couldn't load messages."));
+    }
     return;
   }
+  clearTimeout(Soc2.chatWatch);
   let reacts = {};
   try { reacts = (await rdb(`reactions/${cid}`, "GET", undefined, reactQuery)) || {}; } catch {}
-  if (Soc2.chatWith !== them) return;
+  if (Soc2.chatWith !== them || $("chat").hidden) return;
   data = data || {};
   const keys = Object.keys(data).sort();
   const sig = keys.length + ":" + (keys[keys.length - 1] || "") + ":" + JSON.stringify(reacts);
   const log = $("chatLog");
 
-  if (sig !== Soc2.chatSig && !menuOpen()) {
+  if (sig !== Soc2.chatSig && (first || !menuOpen())) {
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 70;
     if (!keys.length) log.replaceChildren(empty("Say hi! Hold a message to react."));
     else log.replaceChildren(...keys.map(k => msgBubble(data[k], k, data[k].from === me, reacts[k], { kind: "dm", id: cid }, null)));
@@ -172,7 +180,7 @@ loadMessages = async function (first) {
 // group chat: same as before, but with reactions
 loadG = async function (first) {
   const g = GR.cur;
-  if (!g || document.hidden) return;
+  if (!g || (!first && document.hidden)) return;
   let data;
   try { data = (await rdb(`groupMsgs/${g.id}`, "GET", undefined, reactQuery)) || {}; }
   catch { if (first && GR.cur === g) $("gLog").replaceChildren(empty("Couldn't load messages.")); return; }
@@ -182,7 +190,7 @@ loadG = async function (first) {
   const keys = Object.keys(data).sort(), me = meId(), log = $("gLog");
   const sig = keys.length + ":" + (keys[keys.length - 1] || "") + ":" + JSON.stringify(reacts);
 
-  if (sig !== GR.sig && !menuOpen()) {
+  if (sig !== GR.sig && (first || !menuOpen())) {
     const near = log.scrollHeight - log.scrollTop - log.clientHeight < 70;
     const senders = [...new Set(keys.map(k => data[k].from))];
     const profs = await Promise.all(senders.map(getProfile));
