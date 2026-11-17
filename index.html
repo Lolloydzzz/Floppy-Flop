@@ -17,186 +17,72 @@
 <link rel="stylesheet" href="theme.css?v=1">
 </head>
 <script>
-/* Chat loader replacement: plain read (no orderBy), shows the real reason instead of "Loading...". */
+/* Chat: plain read of the chat node (no orderBy / limitToLast). */
 (function () {
-  "use strict";
-  if (window.__chatFix) return;
-  window.__chatFix = true;
+  if (window.__chatFix2) return;
+  window.__chatFix2 = true;
 
-  const P = text => {
-    const p = document.createElement("p");
-    p.className = "sub emptymsg";
-    p.textContent = text;
-    return p;
-  };
-
-  function withTimeout(promise, ms, msg) {
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(msg)), ms);
-      promise.then(v => { clearTimeout(t); resolve(v); },
-                   e => { clearTimeout(t); reject(e); });
-    });
+  function tok() {
+    var u = Social.user;
+    if (!u) return Promise.reject(new Error("not logged in"));
+    if (u.idToken && Date.now() < (u.expires || 0) - 5000) return Promise.resolve(u.idToken);
+    return token();
   }
 
-  async function getToken() {
-    const u = Social.user;
-    if (!u) throw new Error("Not logged in");
-    if (u.idToken && Date.now() < (u.expires || 0) - 5000) return u.idToken;
-    return await withTimeout(token(), 8000, "token refresh timed out");
-  }
-
-  async function apiGet(path, query, ms) {
-    const t = await getToken();
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms || 12000);
-    const url = `${DB_URL}/${path}.json?auth=${encodeURIComponent(t)}${query || ""}`;
-    const t0 = Date.now();
-    let res;
-    try {
-      res = await fetch(url, { method: "GET", signal: ctrl.signal });
-    } catch (e) {
-      clearTimeout(timer);
-      throw new Error(e && e.name === "AbortError"
-        ? "no answer after " + (Date.now() - t0) + "ms"
-        : "network error: " + (e && e.message ? e.message : e));
-    }
-    clearTimeout(timer);
-    const text = await res.text();
-    console.log("[chat-fix] " + path + (query || "") + " -> HTTP " + res.status + " in " + (Date.now() - t0) + "ms");
-    if (!res.ok) throw new Error("HTTP " + res.status + " after " + (Date.now() - t0) + "ms\n" + text.slice(0, 180));
-    return text ? JSON.parse(text) : null;
-  }
-
-  async function diagnose(me, them) {
-    const cid = [me, them].sort().join("_");
-    const tests = [
-      ["friends you->them", `friends/${me}/${them}`],
-      ["friends them->you", `friends/${them}/${me}`],
-      ["chat node", `chats/${cid}`]
-    ];
-    return (await Promise.all(tests.map(async ([label, path]) => {
-      try {
-        const v = await apiGet(path, "", 5000);
-        if (v === null) return label + ": empty";
-        const s = JSON.stringify(v);
-        return label + ": " + (s.length > 70 ? s.slice(0, 70) + "..." : s);
-      } catch (e) {
-        return label + ": " + String((e && e.message) || e).split("\n")[0];
-      }
-    }))).join("\n");
-  }
-
-  function showProblem(text) {
-    const log = document.getElementById("chatLog");
-    if (!log) return;
-    const msg = document.createElement("p");
-    msg.className = "sub emptymsg";
-    msg.style.cssText = "white-space:pre-wrap;text-align:left;font-size:12px;";
-    msg.textContent = text;
-    const retry = document.createElement("button");
-    retry.className = "mini";
-    retry.textContent = "Retry";
-    retry.onclick = () => { Soc2.chatSig = ""; loadMessages(true); };
-    log.replaceChildren(msg, retry);
-    console.warn("[chat-fix] " + text.replace(/\n/g, " | "));
-  }
-
-  async function loadMessages(first) {
-    const them = Soc2.chatWith;
-    if (!them || !Social.user) return;
-    if (!first && document.hidden) return;
-    const me = Social.user.uid;
-    const cid = [me, them].sort().join("_");
-    const log = document.getElementById("chatLog");
-    if (!log) return;
-
-    let data;
-    try {
-      // plain read: no orderBy, no limit -> nothing for the rules/query engine to refuse
-      data = await apiGet(`chats/${cid}/messages`, "");
-    } catch (e) {
-      if (Soc2.chatWith !== them) return;
-      if (Soc2.chatSig === "") {
-        showProblem("Couldn't load messages.\n\nReason: " + ((e && e.message) || e) +
-                    "\n\nDiagnosis:\n" + await diagnose(me, them));
-      }
-      return;
-    }
-    if (Soc2.chatWith !== them) return;
-
-    data = data || {};
-    const keys = Object.keys(data).sort().slice(-60);   // last 60, done here instead of by the server
-    const sig = keys.length + ":" + (keys[keys.length - 1] || "");
-    if (sig !== Soc2.chatSig) {
-      const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 70;
-      if (!keys.length) {
-        log.replaceChildren(P("Say hi! (0 messages stored)"));
-      } else {
-        log.replaceChildren(...keys.map(k => {
-          const m = data[k], mine = m.from === me;
-          const d = document.createElement("div");
-          d.className = "bub " + (mine ? "mine" : "theirs");
-          const s = document.createElement("span");
-          s.textContent = m.text;
-          const sm = document.createElement("small");
-          sm.textContent = timeText(m.t);
-          d.append(s, sm);
-          return d;
-        }));
-      }
-      if (first || Soc2.chatSig === "" || nearBottom) log.scrollTop = log.scrollHeight;
-      Soc2.chatSig = sig;
-    }
-
-    const last = data[keys[keys.length - 1]];
-    const seen = (Soc2.inbox[them] && Soc2.inbox[them].seen) || 0;
-    if (last && last.from === them && (last.t || 0) > seen && Soc2.inbox[them]) {
-      Soc2.inbox[them].seen = last.t;
-      updateBadges();
-      try {
-        const t = await getToken();
-        await fetch(`${DB_URL}/inbox/${me}/${them}.json?auth=${encodeURIComponent(t)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seen: last.t })
+  function get(path) {
+    return tok().then(function (t) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, 8000);
+      var url = DB_URL + "/" + path + ".json?auth=" + encodeURIComponent(t);
+      return fetch(url, { method: "GET", signal: ctrl.signal })
+        .then(function (r) {
+          clearTimeout(timer);
+          return r.text().then(function (x) {
+            console.log("[chat2] " + path + " -> " + r.status);
+            if (!r.ok) throw new Error("HTTP " + r.status + " " + x.slice(0, 150));
+            return x ? JSON.parse(x) : null;
+          });
+        })
+        .catch(function (e) {
+          clearTimeout(timer);
+          throw (e && e.name === "AbortError") ? new Error("no answer after 8s") : e;
         });
-      } catch (e) {}
-    }
-  }
-
-  function openChat(uid) {
-    if (!Soc2.friends[uid] || !Social.user) return;
-    stopChat();
-    hideViews();
-    document.getElementById("chat").hidden = false;
-    Soc2.chatWith = uid;
-    Soc2.chatSig = "";
-    document.getElementById("chatLog").replaceChildren(P("Loading..."));
-    document.getElementById("chatMsg").textContent = "";
-    document.getElementById("chatInput").value = "";
-    document.getElementById("chatName").textContent = "";
-    document.getElementById("chatPfp").src = pfpSrc("");
-    getProfile(uid).then(p => {
-      if (Soc2.chatWith !== uid) return;
-      document.getElementById("chatName").textContent = p.name;
-      document.getElementById("chatPfp").src = pfpSrc(p.pfp);
     });
-    loadMessages(true);
-    Soc2.chatTimer = setInterval(() => loadMessages(false), 2500);
-    document.getElementById("chatInput").focus();
   }
 
-  function stopChat() {
-    clearInterval(Soc2.chatTimer);
-    Soc2.chatTimer = null;
-    clearTimeout(Soc2.chatWatch);
-    Soc2.chatWatch = null;
-    Soc2.chatWith = null;
-  }
+  window.loadMessages = function (first) {
+    clearTimeout(Soc2.chatWatch);            // stop the old 12s watchdog from hiding errors
+    var them = Soc2.chatWith;
+    if (!them || !Social.user) return;
+    var me = Social.user.uid;
+    var cid = [me, them].sort().join("_");
+    var log = document.getElementById("chatLog");
 
-  window.openChat = openChat;
-  window.loadMessages = loadMessages;
-  window.stopChat = stopChat;
+    get("chats/" + cid + "/messages").then(function (data) {
+      if (Soc2.chatWith !== them) return;
+      data = data || {};
+      var keys = Object.keys(data).sort().slice(-60);
+      var sig = keys.length + ":" + (keys[keys.length - 1] || "");
+      if (sig === Soc2.chatSig) return;
+      Soc2.chatSig = sig;
+      if (!keys.length) {
+        log.replaceChildren(empty("Say hi! (plain read works)"));
+        return;
+      }
+      log.replaceChildren.apply(log, keys.map(function (k) {
+        var m = data[k], mine = m.from === me;
+        return el("div", { className: "bub " + (mine ? "mine" : "theirs") },
+          el("span", { textContent: m.text }),
+          el("small", { textContent: timeText(m.t) }));
+      }));
+      log.scrollTop = log.scrollHeight;
+    }).catch(function (e) {
+      if (Soc2.chatWith !== them) return;
+      var retry = el("button", { className: "mini", textContent: "Retry" });
+      retry.onclick = function () { Soc2.chatSig = ""; window.loadMessages(true); };
+      log.replaceChildren(empty("Couldn't load messages: " + (e && e.message ? e.message : e)), retry);
+    });
+  };
 })();
 </script>
 <body>
