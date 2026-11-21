@@ -6,7 +6,11 @@ SFX.level = () => [523, 784].forEach((f, i) => tone(f, 0.14, "triangle", 0.16, 0
 SFX.warn  = () => { tone(880, 0.07, "square", 0.05); tone(880, 0.07, "square", 0.05, 0, 0.12); };
 SFX.zap   = () => tone(1800, 0.4, "sawtooth", 0.08, 160);
 SFX.boom  = () => { noise(0.3, 0.3); tone(90, 0.3, "sawtooth", 0.15, 40); };
-TOAST_SFX.push(["LEVEL", "level"], ["PHASE", "level"]);
+SFX.pickup = () => [660, 990].forEach((f, i) => tone(f, 0.1, "triangle", 0.15, 0, i * 0.07));
+SFX.close  = () => tone(1200, 0.12, "sine", 0.1, 1900);
+SFX.combo  = () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.1, "square", 0.06, 0, i * 0.06));
+SFX.shield = () => { noise(0.2, 0.25); tone(300, 0.3, "triangle", 0.18, 120); };
+TOAST_SFX.push(["LEVEL", "level"], ["PHASE", "level"], ["SHIELD BROKE", "shield"], ["SHIELD", "pickup"], ["SLOW-MO", "pickup"], ["BLAST", "smash"], ["COMBO", "combo"]);
 
 // ---------- 2. Reactions on messages ----------
 // HOLD a message to react (and to see who reacted). Tap a reaction under a message to see who reacted too.
