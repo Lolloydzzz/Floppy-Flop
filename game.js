@@ -576,7 +576,7 @@ function dangers(b) {
       if (ta < 1.4 && t.fire > 0) out.push({ ta, y: t.y, hr: t.h / 2 });
       continue;
     }
-    if (t.type === "icicle" || t.type === "bomb" || t.type === "drone" || t.type === "pendulum") {
+    if (t.type === "bomb" || t.type === "drone" || t.type === "pendulum") {
       if (t.warn <= 0) out.push({ ta: 0, x: t.x, y: t.y, hr: (t.type === "bomb" ? 76 : t.r || 14) + 6 });
       continue;
     }
@@ -637,7 +637,7 @@ function useAbility() {
   if (id === "renxu") { ab.t = a.duration; mult = 2; toast("Double score!"); ring(fx.x, fx.y, "#ffd23f", 60); burst(fx.x, fx.y, "#ffd23f", 16, 4); }
   if (id === "emanski") { ab.t = a.duration; gapTarget = TRAP_SHRINK; toast("Big gap!"); ring(fx.x, fx.y, "#7ee8f5", 60); shake = 5; }
 }
- 
+
 function spendCharge() {
   ab.charges--;
   if (ab.charges <= 0) startCd();
@@ -673,7 +673,7 @@ function tickAbility(sec) {
 // ---- Traps ----
 // missile: flies straight (warning first)      meteor: falls diagonally from the sky
 // saw: wavy spinning blade                      orb: bouncing energy ball
-// rain: falling icicles   bomb: drops, blinks, explodes   drone: homing   pendulum: swinging ball
+// bomb: drops, blinks, explodes                 drone: homing   pendulum: swinging ball
 // laser: beam across the whole screen           wall: a row of missiles with one gap
 function spawnTrap(type, D, val, delay) {
   const out = [], add = o => { traps.push(o); out.push(o); return o; };
@@ -700,14 +700,6 @@ function spawnTrap(type, D, val, delay) {
     const w = 0.4 + delay;
     add({ ...base, warn: w, warnMax: w, x: W + 30, y: randY(), vx: -(2.3 + Math.random() * 0.5) * D.spd,
       vy: (2 + Math.random()) * D.spd * (Math.random() < 0.5 ? -1 : 1), r: 15 });
-  } else if (type === "rain") {
-    const n = 4 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < n; i++) {
-      const w = D.warn * 0.7 + delay + i * 0.13;
-      const x = clamp(170 + (Math.random() - 0.5) * 260, 50, W - 20);
-      add({ ...base, type: "icicle", val: i === 0 ? val : 0, warn: w, warnMax: w, x, sx: x, y: -30,
-        vx: -(0.6 + Math.random() * 0.6) * D.spd, vy: (3.8 + Math.random() * 1.0) * D.spd, r: 10 });
-    }
   } else if (type === "bomb") {
     const vy = 3.2 * D.spd, vx = -2.4 * D.spd;
     const ty = aim ? clamp(f.y + (Math.random() - 0.5) * 100, 60, PLAY_H - 60) : randY();
@@ -799,8 +791,6 @@ function updateTrap(t, sec) {
   if (t.type === "meteor") {
     t.y += t.vy * dt;
     if (tick % 2 === 0) addParticle({ type: "circle", x: t.x, y: t.y, vx: 0.6, vy: -0.4, g: 0, life: 0.3, max: 0.3, s: 5, color: "#ff9a2f" });
-  } else if (t.type === "icicle") {
-    t.y += t.vy * dt;
   } else if (t.type === "saw") {
     t.y = t.base + Math.sin(t.age * t.freq + t.phase) * t.amp;
     t.ang += 0.3 * dt;
@@ -898,7 +888,6 @@ function shatterTrap(t, b) {
     saw:      ["#b8c0cc", "#5b6470", "#ff4d4d", "#2a2f38"],
     orb:      ["#c58bff", "#5b2bb5", "#ffffff", "#a06bff"],
     laser:    ["#ff4040", "#ffffff", "#ffd23f", "#222831"],
-    icicle:   ["#7fd6ff", "#ffffff", "#5aa6e8", "#2a6fb0"],
     bomb:     ["#2a2f38", "#ff9a2f", "#ffd23f", "#ff3b3b"],
     drone:    ["#2b2f3a", "#9aa3b2", "#ff4d4d", "#ffd23f"],
     pendulum: ["#6b7280", "#b8c0cc", "#ff4d4d", "#2a2f38"],
@@ -932,8 +921,6 @@ const PATTERNS = [
       const n = D.L >= 6 ? 5 : 4;
       for (let i = 0; i < n; i++) later(i * 0.55, () => { const [t] = spawnTrap("missile", D, 1, 0); t.y = i % 2 ? PLAY_H - 120 : 120; });
       return 0.55 * n; } },
-
-  { name: "rain", minL: 2, w: 5, run(D) { spawnTrap("rain", D, 1, 0); return 1.2; } },
 
   // a shower of meteors, one every 0.4 seconds
   { name: "shower", minL: 3, w: 4, run(D) {
@@ -1417,7 +1404,7 @@ function drawTrap(t, aura) {
   if (t.type === "laser") { drawLaser(t); return; }
 
   if (t.warn > 0) {                      // warning sign where it will appear
-    if (t.type === "meteor" || t.type === "icicle" || t.type === "bomb") {
+    if (t.type === "meteor" || t.type === "bomb") {
       drawWarn(clamp(t.sx, 18, W - 18), 20, t);
     } else if (t.type === "pendulum") {
       drawWarn(W - 20, 26, t);
@@ -1513,13 +1500,6 @@ function drawTrap(t, aura) {
       const a = t.age * 4 + (i * 6.2832) / 3;
       ctx.beginPath(); ctx.arc(Math.cos(a) * 22, Math.sin(a) * 22, 2.5, 0, 7); ctx.fill();
     }
-  } else if (t.type === "icicle") {
-    const g = ctx.createLinearGradient(-8, 0, 8, 0);
-    g.addColorStop(0, "#7fd6ff"); g.addColorStop(0.5, "#ffffff"); g.addColorStop(1, "#5aa6e8");
-    ctx.fillStyle = g;
-    ctx.strokeStyle = "#2a6fb0";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(-8, -16); ctx.lineTo(8, -16); ctx.lineTo(0, 18); ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if (t.type === "bomb") {
     if (t.stage === "boom") {
       const a = Math.max(0, t.boom / 0.35), R = Math.max(1, t.br);
